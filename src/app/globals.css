@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6efe4;
+  --foreground: #302118;
+  --panel: rgba(255, 251, 245, 0.82);
+  --panel-strong: rgba(255, 249, 242, 0.92);
+  --line-soft: rgba(126, 92, 65, 0.16);
+  --ink-soft: #6d5645;
+  --ink-strong: #2b1c14;
+  --accent: #c56a38;
+  --accent-deep: #8c4721;
+  --accent-soft: #f4d4c0;
+  --user-bubble: #f8dcc7;
+  --assistant-bubble: #fffaf5;
+  --warning: #a33924;
+  --shadow: 0 24px 60px rgba(83, 49, 24, 0.12);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background:
+    radial-gradient(circle at top left, rgba(244, 212, 192, 0.75), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(216, 158, 108, 0.18), transparent 26%),
+    linear-gradient(180deg, #f8f0e6 0%, #f3eadf 100%);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.trace-panel {
+  border: 1px solid var(--line-soft);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(20px);
+}
+
+.trace-tag {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(197, 106, 56, 0.22);
+  background: rgba(244, 212, 192, 0.54);
+  padding: 0.35rem 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--accent-deep);
+  text-transform: uppercase;
+}
+
+.message-enter {
+  animation: rise-in 0.35s ease-out;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(126, 92, 65, 0.18);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
