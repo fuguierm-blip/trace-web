@@ -90,4 +90,4 @@ pnpm build
    - `TRACE_OPENAI_MODEL`
 3. 触发部署即可
 
-这个项目默认使用 Railway 对 Next.js 的自动构建识别，也可以通过 CLI 执行部署。
+这个项目已经显式提供 `Dockerfile`，Railway 会直接按仓库里的构建定义部署，不再依赖默认的 Nixpacks 推断。
