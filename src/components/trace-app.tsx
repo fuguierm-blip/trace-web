@@ -243,6 +243,13 @@ const staiOptions = [
   { value: 4, label: '非常明显' },
 ];
 
+const reverseScoredOptions = [
+  { value: 1, label: '非常没有' },
+  { value: 2, label: '有些' },
+  { value: 3, label: '中等程度' },
+  { value: 4, label: '非常明显' },
+];
+
 function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; onSubmit: (result: STAIResult) => void; onClose?: () => void }) {
   const [answers, setAnswers] = useState<number[]>(Array(6).fill(0));
   const allAnswered = answers.every(a => a > 0);
@@ -315,7 +322,7 @@ function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; 
                 )}
               </p>
               <div className="grid grid-cols-4 gap-2">
-                {staiOptions.map(opt => (
+                {(question.reverseScored ? reverseScoredOptions : staiOptions).map(opt => (
                   <button
                     key={opt.value}
                     onClick={() => handleSelect(qi, opt.value)}
