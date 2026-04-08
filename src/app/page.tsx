@@ -1,5 +1,5 @@
-import TraceFrontend from "@/components/trace-figma-frontend";
+import TraceApp from "@/components/trace-app";
 
 export default function Home() {
-  return <TraceFrontend />;
+  return <TraceApp />;
 }
