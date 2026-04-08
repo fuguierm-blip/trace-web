@@ -228,12 +228,12 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 
 // ==================== STAI-S-6 Questionnaire ====================
 const staiQuestions = [
-  '我感到平静',
-  '我感到紧张',
-  '我感到放松',
-  '我感到忧虑',
-  '我感到满意',
-  '我感到心烦意乱',
+  { text: '我感到心情平静', reverseScored: true },
+  { text: '我感到紧张', reverseScored: false },
+  { text: '我感到烦乱', reverseScored: false },
+  { text: '我感到轻松', reverseScored: true },
+  { text: '我感到心满意足', reverseScored: true },
+  { text: '我感到烦恼', reverseScored: false },
 ];
 
 const staiOptions = [
@@ -293,7 +293,7 @@ function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; 
         </div>
 
         <div className="px-6 pb-6 flex flex-col gap-4">
-          {staiQuestions.map((q, qi) => (
+          {staiQuestions.map((question, qi) => (
             <motion.div
               key={qi}
               initial={{ opacity: 0, x: -10 }}
@@ -304,7 +304,15 @@ function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; 
             >
               <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
                 <span className="inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 text-xs text-white" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>{qi + 1}</span>
-                {q}
+                {question.text}
+                {question.reverseScored && (
+                  <span
+                    className="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
+                    style={{ background: 'rgba(5, 150, 105, 0.12)', color: '#047857', fontWeight: 700 }}
+                  >
+                    反向记分题
+                  </span>
+                )}
               </p>
               <div className="grid grid-cols-4 gap-2">
                 {staiOptions.map(opt => (
@@ -327,6 +335,11 @@ function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; 
                   </button>
                 ))}
               </div>
+              {question.reverseScored && (
+                <p className="mt-3 text-xs text-emerald-700/80" style={{ ...cuteTextStyle, fontWeight: 500 }}>
+                  提示：本题为反向记分题，作答时仍按你此时此刻的实际感受选择相应程度。
+                </p>
+              )}
             </motion.div>
           ))}
 
