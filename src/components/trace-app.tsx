@@ -244,10 +244,10 @@ const staiOptions = [
 ];
 
 const reverseScoredOptions = [
-  { value: 1, label: '非常没有' },
-  { value: 2, label: '有些' },
-  { value: 3, label: '中等程度' },
-  { value: 4, label: '非常明显' },
+  { value: 1, label: '非常明显' },
+  { value: 2, label: '中等程度' },
+  { value: 3, label: '有些' },
+  { value: 4, label: '完全没有' },
 ];
 
 function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; onSubmit: (result: STAIResult) => void; onClose?: () => void }) {
@@ -312,14 +312,12 @@ function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; 
               <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
                 <span className="inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 text-xs text-white" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>{qi + 1}</span>
                 {question.text}
-                {question.reverseScored && (
-                  <span
-                    className="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
-                    style={{ background: 'rgba(5, 150, 105, 0.12)', color: '#047857', fontWeight: 700 }}
-                  >
-                    反向记分题
-                  </span>
-                )}
+                <span
+                  className="ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[11px]"
+                  style={{ background: 'rgba(5, 150, 105, 0.12)', color: '#047857', fontWeight: 700 }}
+                >
+                  {question.reverseScored ? '反向记分题' : '正向记分题'}
+                </span>
               </p>
               <div className="grid grid-cols-4 gap-2">
                 {(question.reverseScored ? reverseScoredOptions : staiOptions).map(opt => (
@@ -342,9 +340,13 @@ function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; 
                   </button>
                 ))}
               </div>
-              {question.reverseScored && (
+              {question.reverseScored ? (
                 <p className="mt-3 text-xs text-emerald-700/80" style={{ ...cuteTextStyle, fontWeight: 500 }}>
                   提示：本题为反向记分题，作答时仍按你此时此刻的实际感受选择相应程度。
+                </p>
+              ) : (
+                <p className="mt-3 text-xs text-emerald-700/80" style={{ ...cuteTextStyle, fontWeight: 500 }}>
+                  提示：本题为正向记分题，作答时请按你此时此刻的实际感受选择相应程度。
                 </p>
               )}
             </motion.div>
