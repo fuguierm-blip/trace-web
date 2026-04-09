@@ -38,68 +38,6 @@ function recentHistory(history: TraceMessage[]): TraceMessage[] {
   return history.slice(-HISTORY_WINDOW);
 }
 
-function collectUserText(history: TraceMessage[]): string {
-  return history
-    .filter((message) => message.role === "user")
-    .map((message) => message.content)
-    .join("\n");
-}
-
-function hasProfileInfo(content: string): boolean {
-  const text = content.replace(/\s+/g, "");
-  const age = /(\d{1,2}岁|年龄\d{1,2}|年龄[:：]?\d{1,2})/.test(text);
-  const gender =
-    /(性别|男生|女生|男性|女性|我是男|我是女)/.test(text) ||
-    /(^|[，。,；;、\s])(男|女)([，。,；;、\s]|$)/.test(text);
-  const major =
-    /(专业|学院|系|学的是|就读于|学习的是)/.test(text) ||
-    /[^\n，。,；;]{1,12}(专业|学院|系)/.test(text);
-  return age && gender && major;
-}
-
-function hasAnxietyEvent(content: string): boolean {
-  const text = content.replace(/\s+/g, "");
-  return /(担心|压力|烦恼|困扰|睡不着|失眠|害怕|崩溃|不安|内耗|未来|考试|学业|人际|家庭|工作|就业|论文|保研|绩点|实习|求职|室友|恋爱|分手|父母|老师|同学)/.test(text);
-}
-
-function buildOnboardingReply(kind: "profile" | "concern", userMessage: string): string {
-  if (kind === "profile") {
-    if (hasAnxietyEvent(userMessage)) {
-      return "我已经看到你刚才提到的那些感受了，也谢谢你愿意告诉我这些。开始之前，想先温柔地请你告诉我您的年龄、专业和性别。等我先了解这些基本信息后，我会继续陪你慢慢梳理最近让你感到焦虑的事情。";
-    }
-    return "谢谢你愿意来这里和我说这些。开始之前，想先温柔地请你告诉我您的年龄、专业和性别。等我先了解这些基本信息后，我会再请你慢慢说说最近让你感到焦虑的事情。";
-  }
-
-  return "谢谢你告诉我这些基本信息，我已经记下了。接下来，想请你慢慢说说，最近哪件事情最让你感到焦虑，或者最近哪一刻最让你觉得压力特别明显。我会认真听你说。";
-}
-
-function buildEarlySession(
-  session: TraceSession,
-  historyWithUser: TraceMessage[],
-  assistantReply: string,
-  focusNote: string,
-): { reply: string; session: TraceSession } {
-  const assistantEntry: TraceMessage = {
-    id: crypto.randomUUID(),
-    role: "assistant",
-    content: assistantReply,
-    createdAt: new Date().toISOString(),
-  };
-
-  return {
-    reply: assistantReply,
-    session: {
-      ...session,
-      history: [...historyWithUser, assistantEntry],
-      state: {
-        ...session.state,
-        focusNote,
-        summary: focusNote,
-      },
-    },
-  };
-}
-
 function sanitizeMessage(content: string): string {
   return content.replace(/\r/g, "").trim();
 }
@@ -384,25 +322,6 @@ export async function runTraceTurn(args: {
         },
       },
     };
-  }
-
-  const combinedUserText = collectUserText(historyWithUser);
-  if (!hasProfileInfo(combinedUserText)) {
-    return buildEarlySession(
-      args.session,
-      historyWithUser,
-      buildOnboardingReply("profile", userMessage),
-      "TRACE 正在收集用户的年龄、专业和性别等基本信息。",
-    );
-  }
-
-  if (!hasAnxietyEvent(combinedUserText)) {
-    return buildEarlySession(
-      args.session,
-      historyWithUser,
-      buildOnboardingReply("concern", userMessage),
-      "TRACE 已获取基本信息，正在邀请用户描述最近的焦虑事件。",
-    );
   }
 
   const extracted = await callTraceJson<StateExtraction>(
