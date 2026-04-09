@@ -132,7 +132,7 @@ function enforceResponseShape(content: string): string {
   let next = dedupeTrailingSentences(sanitizeMessage(content)).replace(/\s+/g, " ");
   const fillerSentences = [
     "先不用急着证明自己已经完全没事，能把这股压力稍微看清一点，就已经是在把局面往回拉。",
-    "我们这一轮不用把整件事处理完，只要先把最压住你的那层想法松动一点就够了。",
+    "现在不用把整件事一下子处理完，只要先把最压住你的那层想法松动一点就够了。",
   ];
 
   next = keepSingleQuestion(next);
