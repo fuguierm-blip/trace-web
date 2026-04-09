@@ -18,6 +18,20 @@ interface STAIResult {
   type: 'pre' | 'post';
 }
 
+interface PANASResult {
+  answers: number[];
+  timestamp: Date;
+}
+
+interface EventChecklistResult {
+  eventNature: number;
+  categories: string[];
+  emotionImpact: number;
+  questionnaireImpact: number;
+  description: string;
+  timestamp: Date;
+}
+
 const welcomeMessage: Message = {
   id: 'trace-welcome',
   text: '你好！我是 Trace 🌿 很高兴见到你。我是一个温暖、善解人意的 AI 伙伴，你可以和我分享任何想法、感受或烦恼。我会认真倾听，陪伴你度过每一个时刻。请在开始之前先告诉我您的年龄、专业和性别。等我先了解这些基本信息后，再陪你慢慢说最近让你感到焦虑的事情。',
@@ -28,6 +42,9 @@ const welcomeMessage: Message = {
 const cuteTextStyle = {
   fontFamily: "'ZCOOL KuaiLe', 'Ma Shan Zheng', cursive, sans-serif"
 };
+
+const COMPLETED_SESSIONS_KEY = 'trace-completed-sessions-count';
+const TARGET_SESSIONS_FOR_FOLLOWUP = 3;
 
 // ==================== Eye Following Card ====================
 function EyeFollowingCard() {
@@ -250,6 +267,56 @@ const reverseScoredOptions = [
   { value: 4, label: '完全没有' },
 ];
 
+const panasQuestions = [
+  '感兴趣的',
+  '心烦的',
+  '精神活力高的',
+  '心神不宁的',
+  '劲头足的',
+  '内疚的',
+  '恐惧的',
+  '怀有敌意的',
+  '热情的',
+  '自豪的',
+  '易怒的',
+  '警觉性高的',
+  '害羞的',
+  '备受鼓舞的',
+  '紧张的',
+  '意志坚定的',
+  '注意力集中的',
+  '坐立不安的',
+  '有活力的',
+  '害怕的',
+];
+
+const panasOptions = [
+  { value: 1, label: '几乎没有' },
+  { value: 2, label: '比较少' },
+  { value: 3, label: '中等' },
+  { value: 4, label: '比较多' },
+  { value: 5, label: '极其多' },
+];
+
+const eventNatureOptions = [
+  { value: 1, label: '没有' },
+  { value: 2, label: '有，负面为主' },
+  { value: 3, label: '有，正面为主' },
+  { value: 4, label: '有，正负都有' },
+  { value: 5, label: '不确定' },
+];
+
+const eventCategoryOptions = [
+  '学业/考试/论文',
+  '实习/求职/升学申请',
+  '人际冲突',
+  '恋爱/分手',
+  '家庭事件',
+  '身体疾病或睡眠问题',
+  '经济压力',
+  '其他',
+];
+
 function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; onSubmit: (result: STAIResult) => void; onClose?: () => void }) {
   const [answers, setAnswers] = useState<number[]>(Array(6).fill(0));
   const allAnswered = answers.every(a => a > 0);
@@ -373,6 +440,383 @@ function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; 
   );
 }
 
+function NoticeDialog({ message, onClose }: { message: string; onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(8px)' }}
+    >
+      <motion.div
+        initial={{ scale: 0.94, y: 12 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.94, y: 12 }}
+        className="w-full max-w-md rounded-3xl p-6"
+        style={{ background: 'linear-gradient(to bottom, #f0fdf4, #ffffff)', boxShadow: '0 25px 60px rgba(0,0,0,0.18)' }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+              <ClipboardList size={16} className="text-white" />
+            </div>
+            <h2 className="text-emerald-900" style={{ ...cuteTextStyle, fontWeight: 700, fontSize: '1rem' }}>提示</h2>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-emerald-100 transition-colors">
+            <X size={18} className="text-emerald-600" />
+          </button>
+        </div>
+        <p className="text-sm text-emerald-900 leading-7" style={{ ...cuteTextStyle, fontWeight: 500 }}>
+          {message}
+        </p>
+        <button
+          onClick={onClose}
+          className="mt-6 w-full py-3 rounded-2xl text-white transition-all"
+          style={{ ...cuteTextStyle, fontWeight: 600, background: 'linear-gradient(135deg, #059669 0%, #047857 100%)' }}
+        >
+          我知道了
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function PANASQuestionnaire({ onSubmit, onClose }: { onSubmit: (result: PANASResult) => void; onClose?: () => void }) {
+  const [answers, setAnswers] = useState<number[]>(Array(20).fill(0));
+  const allAnswered = answers.every((answer) => answer > 0);
+
+  const handleSelect = (questionIndex: number, value: number) => {
+    setAnswers((previous) => {
+      const next = [...previous];
+      next[questionIndex] = value;
+      return next;
+    });
+  };
+
+  const handleSubmit = () => {
+    if (!allAnswered) return;
+    onSubmit({ answers: [...answers], timestamp: new Date() });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl relative"
+        style={{ background: 'linear-gradient(to bottom, #f0fdf4, #ffffff)', boxShadow: '0 25px 60px rgba(0,0,0,0.15)' }}
+      >
+        <div className="sticky top-0 z-10 px-6 pt-6 pb-4 rounded-t-3xl" style={{ background: 'linear-gradient(to bottom, #f0fdf4, rgba(240,253,244,0.96))', backdropFilter: 'blur(10px)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                <ClipboardList size={16} className="text-white" />
+              </div>
+              <h2 className="text-emerald-900" style={{ ...cuteTextStyle, fontWeight: 700, fontSize: '1.1rem' }}>情绪感受回顾</h2>
+            </div>
+            {onClose && (
+              <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-emerald-100 transition-colors">
+                <X size={18} className="text-emerald-600" />
+              </button>
+            )}
+          </div>
+          <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(5, 150, 105, 0.08)' }}>
+            <p className="text-xs text-emerald-800" style={{ ...cuteTextStyle, fontWeight: 500, lineHeight: 1.7 }}>
+              请根据您<span style={{ color: '#059669', fontWeight: 700 }}>过去一周</span>的真实感受，对下面每个词语选择最符合的程度。
+              请尽量按照第一感觉作答，不需要反复比较，也不需要刻意追求“正确答案”。
+            </p>
+            <p className="mt-2 text-xs text-emerald-700/80" style={{ ...cuteTextStyle, fontWeight: 500, lineHeight: 1.7 }}>
+              评分方式：1 = 几乎没有，2 = 比较少，3 = 中等，4 = 比较多，5 = 极其多。
+            </p>
+          </div>
+        </div>
+
+        <div className="px-6 pb-6 flex flex-col gap-4">
+          {panasQuestions.map((question, questionIndex) => (
+            <motion.div
+              key={question}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: questionIndex * 0.03 }}
+              className="rounded-2xl p-4"
+              style={{
+                background: answers[questionIndex] > 0 ? 'rgba(5, 150, 105, 0.06)' : 'rgba(255,255,255,0.82)',
+                border: `1.5px solid ${answers[questionIndex] > 0 ? 'rgba(5, 150, 105, 0.2)' : 'rgba(0,0,0,0.06)'}`,
+              }}
+            >
+              <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 text-xs text-white" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                  {questionIndex + 1}
+                </span>
+                {question}
+              </p>
+              <div className="grid grid-cols-5 gap-2">
+                {panasOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => handleSelect(questionIndex, option.value)}
+                    className="py-2 px-1 rounded-xl text-xs transition-all"
+                    style={{
+                      ...cuteTextStyle,
+                      fontWeight: answers[questionIndex] === option.value ? 600 : 400,
+                      background: answers[questionIndex] === option.value ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.9)',
+                      color: answers[questionIndex] === option.value ? 'white' : '#065f46',
+                      border: `1.5px solid ${answers[questionIndex] === option.value ? 'transparent' : 'rgba(5,150,105,0.15)'}`,
+                      boxShadow: answers[questionIndex] === option.value ? '0 4px 12px rgba(5,150,105,0.3)' : 'none',
+                    }}
+                  >
+                    <div style={{ fontSize: '1rem', marginBottom: '2px' }}>{option.value}</div>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          ))}
+
+          <motion.button
+            whileHover={allAnswered ? { scale: 1.03 } : {}}
+            whileTap={allAnswered ? { scale: 0.97 } : {}}
+            onClick={handleSubmit}
+            disabled={!allAnswered}
+            className="w-full py-3 rounded-2xl text-white mt-2 transition-all disabled:opacity-40"
+            style={{
+              ...cuteTextStyle,
+              fontWeight: 600,
+              background: allAnswered ? 'linear-gradient(135deg, #059669 0%, #047857 100%)' : 'rgba(5,150,105,0.3)',
+              boxShadow: allAnswered ? '0 10px 30px rgba(5, 150, 105, 0.35)' : 'none',
+            }}
+          >
+            {allAnswered ? '提交回顾' : `请完成所有题目（${answers.filter((answer) => answer > 0).length}/20）`}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function EventChecklistQuestionnaire({ onSubmit, onClose }: { onSubmit: (result: EventChecklistResult) => void; onClose?: () => void }) {
+  const [eventNature, setEventNature] = useState(0);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [emotionImpact, setEmotionImpact] = useState<number | null>(null);
+  const [questionnaireImpact, setQuestionnaireImpact] = useState<number | null>(null);
+  const [description, setDescription] = useState('');
+
+  const needsCategorySelection = eventNature > 1;
+  const allAnswered =
+    eventNature > 0 &&
+    (!needsCategorySelection || categories.length > 0) &&
+    emotionImpact !== null &&
+    questionnaireImpact !== null;
+
+  const toggleCategory = (category: string) => {
+    setCategories((previous) =>
+      previous.includes(category)
+        ? previous.filter((item) => item !== category)
+        : [...previous, category],
+    );
+  };
+
+  const handleSubmit = () => {
+    if (!allAnswered || emotionImpact === null || questionnaireImpact === null) return;
+    onSubmit({
+      eventNature,
+      categories,
+      emotionImpact,
+      questionnaireImpact,
+      description: description.trim(),
+      timestamp: new Date(),
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl relative"
+        style={{ background: 'linear-gradient(to bottom, #f0fdf4, #ffffff)', boxShadow: '0 25px 60px rgba(0,0,0,0.15)' }}
+      >
+        <div className="sticky top-0 z-10 px-6 pt-6 pb-4 rounded-t-3xl" style={{ background: 'linear-gradient(to bottom, #f0fdf4, rgba(240,253,244,0.96))', backdropFilter: 'blur(10px)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                <ClipboardList size={16} className="text-white" />
+              </div>
+              <h2 className="text-emerald-900" style={{ ...cuteTextStyle, fontWeight: 700, fontSize: '1.1rem' }}>近期事件回顾</h2>
+            </div>
+            {onClose && (
+              <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-emerald-100 transition-colors">
+                <X size={18} className="text-emerald-600" />
+              </button>
+            )}
+          </div>
+          <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(5, 150, 105, 0.08)' }}>
+            <p className="text-xs text-emerald-800" style={{ ...cuteTextStyle, fontWeight: 500, lineHeight: 1.7 }}>
+              请回顾从第一次填写会话前问答到现在这段时间里，生活中是否出现过对您情绪波动比较明显的事情。
+              这部分没有对错之分，只需要按照真实经历作答即可。
+            </p>
+            <p className="mt-2 text-xs text-emerald-700/80" style={{ ...cuteTextStyle, fontWeight: 500, lineHeight: 1.7 }}>
+              如果一时想不全，也没有关系，只填写你认为影响最明显的内容就可以。
+            </p>
+          </div>
+        </div>
+
+        <div className="px-6 pb-6 flex flex-col gap-4">
+          <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.82)', border: '1.5px solid rgba(0,0,0,0.06)' }}>
+            <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 text-xs text-white" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>1</span>
+              自第一次填写问答以来，您是否经历了对情绪影响明显的事件？
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {eventNatureOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => {
+                    setEventNature(option.value);
+                    if (option.value === 1) {
+                      setCategories([]);
+                    }
+                  }}
+                  className="py-2.5 px-3 rounded-xl text-sm text-left transition-all"
+                  style={{
+                    ...cuteTextStyle,
+                    fontWeight: eventNature === option.value ? 600 : 400,
+                    background: eventNature === option.value ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.95)',
+                    color: eventNature === option.value ? 'white' : '#065f46',
+                    border: `1.5px solid ${eventNature === option.value ? 'transparent' : 'rgba(5,150,105,0.15)'}`,
+                  }}
+                >
+                  {option.value}. {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.82)', border: '1.5px solid rgba(0,0,0,0.06)' }}>
+            <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 text-xs text-white" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>2</span>
+              如果有，这件事主要属于哪一类？（可多选）
+            </p>
+            {!needsCategorySelection && (
+              <p className="mb-3 text-xs text-emerald-700/80" style={{ ...cuteTextStyle, fontWeight: 500 }}>
+                如果你选择了“没有”，这一题可以跳过。
+              </p>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {eventCategoryOptions.map((category) => (
+                <button
+                  key={category}
+                  onClick={() => toggleCategory(category)}
+                  disabled={!needsCategorySelection}
+                  className="py-2.5 px-3 rounded-xl text-sm text-left transition-all"
+                  style={{
+                    ...cuteTextStyle,
+                    fontWeight: categories.includes(category) ? 600 : 400,
+                    background: !needsCategorySelection
+                      ? 'rgba(240,253,244,0.9)'
+                      : categories.includes(category)
+                        ? 'linear-gradient(135deg, #059669, #10b981)'
+                        : 'rgba(255,255,255,0.95)',
+                    color: !needsCategorySelection ? '#6b7280' : categories.includes(category) ? 'white' : '#065f46',
+                    border: `1.5px solid ${categories.includes(category) ? 'transparent' : 'rgba(5,150,105,0.15)'}`,
+                    opacity: !needsCategorySelection ? 0.7 : 1,
+                  }}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {[
+            {
+              title: '3. 你认为这件事对你近期情绪状态的影响程度有多大？',
+              value: emotionImpact,
+              setter: setEmotionImpact,
+            },
+            {
+              title: '4. 你认为这件事对你本次填写内容的影响程度有多大？',
+              value: questionnaireImpact,
+              setter: setQuestionnaireImpact,
+            },
+          ].map((item) => (
+            <div key={item.title} className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.82)', border: '1.5px solid rgba(0,0,0,0.06)' }}>
+              <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
+                {item.title}
+              </p>
+              <p className="text-xs text-emerald-700/80 mb-3" style={{ ...cuteTextStyle, fontWeight: 500 }}>
+                0 = 完全没有影响，10 = 影响非常大
+              </p>
+              <div className="grid grid-cols-6 sm:grid-cols-11 gap-2">
+                {Array.from({ length: 11 }, (_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => item.setter(index)}
+                    className="py-2 px-1 rounded-xl text-xs transition-all"
+                    style={{
+                      ...cuteTextStyle,
+                      fontWeight: item.value === index ? 600 : 400,
+                      background: item.value === index ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.95)',
+                      color: item.value === index ? 'white' : '#065f46',
+                      border: `1.5px solid ${item.value === index ? 'transparent' : 'rgba(5,150,105,0.15)'}`,
+                    }}
+                  >
+                    {index}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.82)', border: '1.5px solid rgba(0,0,0,0.06)' }}>
+            <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
+              5. 如愿意，请简要描述最影响你情绪的一件事，以及它大约持续了多久。
+            </p>
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="例如：最近因为论文和实习同时推进，连续两周都觉得很紧绷。"
+              className="w-full min-h-28 rounded-2xl p-4 text-sm text-emerald-950 placeholder-emerald-400 focus:outline-none resize-y"
+              style={{ ...cuteTextStyle, fontWeight: 400, background: 'rgba(255,255,255,0.95)', border: '1.5px solid rgba(5,150,105,0.15)' }}
+            />
+          </div>
+
+          <motion.button
+            whileHover={allAnswered ? { scale: 1.03 } : {}}
+            whileTap={allAnswered ? { scale: 0.97 } : {}}
+            onClick={handleSubmit}
+            disabled={!allAnswered}
+            className="w-full py-3 rounded-2xl text-white mt-2 transition-all disabled:opacity-40"
+            style={{
+              ...cuteTextStyle,
+              fontWeight: 600,
+              background: allAnswered ? 'linear-gradient(135deg, #059669 0%, #047857 100%)' : 'rgba(5,150,105,0.3)',
+              boxShadow: allAnswered ? '0 10px 30px rgba(5, 150, 105, 0.35)' : 'none',
+            }}
+          >
+            {allAnswered ? '提交回顾' : '请先完成前四题'}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ==================== Chat Bubble ====================
 function ChatBubble({ message, index }: { message: Message; index: number }) {
   const isAI = message.sender === 'ai';
@@ -410,19 +854,28 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [showSTAI, setShowSTAI] = useState(false);
-  const [pendingLogout, setPendingLogout] = useState(false);
+  const [exitStep, setExitStep] = useState<'idle' | 'stai' | 'panas' | 'events'>('idle');
   const [preSessionDone, setPreSessionDone] = useState(false);
   const [showPreSTAI, setShowPreSTAI] = useState(true);
   const [snapshot, setSnapshot] = useState<TraceSession | null>(null);
   const [sessionId] = useState(() => crypto.randomUUID());
   const [errorText, setErrorText] = useState('');
+  const [noticeMessage, setNoticeMessage] = useState('');
+  const [completedSessionsCount, setCompletedSessionsCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const visibleMessages = [welcomeMessage, ...messages];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
+
+  useEffect(() => {
+    const storedCount = window.localStorage.getItem(COMPLETED_SESSIONS_KEY);
+    const parsedCount = storedCount ? Number.parseInt(storedCount, 10) : 0;
+    if (Number.isFinite(parsedCount) && parsedCount >= 0) {
+      setCompletedSessionsCount(parsedCount);
+    }
+  }, []);
 
   const handleSendMessage = async (text?: string) => {
     const messageText = (text || inputValue).trim();
@@ -473,14 +926,25 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
     }
   };
 
+  const finalizeLogout = () => {
+    const nextCount = completedSessionsCount + 1;
+    setCompletedSessionsCount(nextCount);
+    window.localStorage.setItem(COMPLETED_SESSIONS_KEY, String(nextCount));
+    setExitStep('idle');
+    onLogout();
+  };
+
   const handleLogoutClick = () => {
-    setPendingLogout(true);
+    setExitStep('stai');
   };
 
   const handlePostSTAISubmit = (result: STAIResult) => {
     void result;
-    setPendingLogout(false);
-    onLogout();
+    if (completedSessionsCount + 1 === TARGET_SESSIONS_FOR_FOLLOWUP) {
+      setExitStep('panas');
+      return;
+    }
+    finalizeLogout();
   };
 
   const handlePreSTAISubmit = (result: STAIResult) => {
@@ -489,9 +953,22 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
     setPreSessionDone(true);
   };
 
-  const handleManualSTAISubmit = (result: STAIResult) => {
+  const handlePANASSubmit = (result: PANASResult) => {
     void result;
-    setShowSTAI(false);
+    setExitStep('events');
+  };
+
+  const handleEventChecklistSubmit = (result: EventChecklistResult) => {
+    void result;
+    finalizeLogout();
+  };
+
+  const handleSTAIAccessClick = () => {
+    setNoticeMessage('抱歉你只有在离开此次会话后需要填写该量表。');
+  };
+
+  const handleFollowupScaleAccessClick = () => {
+    setNoticeMessage('抱歉您只有在第三次会话结束后需要填写这个问卷。');
   };
 
   return (
@@ -505,24 +982,35 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
 
       {/* Post-session STAI (on logout) */}
       <AnimatePresence>
-        {pendingLogout && (
+        {exitStep === 'stai' && (
           <STAIQuestionnaire
             type="post"
             onSubmit={handlePostSTAISubmit}
-            onClose={() => setPendingLogout(false)}
+            onClose={() => setExitStep('idle')}
           />
         )}
       </AnimatePresence>
 
-      {/* Manual STAI */}
       <AnimatePresence>
-        {showSTAI && (
-          <STAIQuestionnaire
-            type="pre"
-            onSubmit={handleManualSTAISubmit}
-            onClose={() => setShowSTAI(false)}
+        {exitStep === 'panas' && (
+          <PANASQuestionnaire
+            onSubmit={handlePANASSubmit}
+            onClose={() => setExitStep('idle')}
           />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {exitStep === 'events' && (
+          <EventChecklistQuestionnaire
+            onSubmit={handleEventChecklistSubmit}
+            onClose={() => setExitStep('idle')}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {noticeMessage && <NoticeDialog message={noticeMessage} onClose={() => setNoticeMessage('')} />}
       </AnimatePresence>
 
       <div className="relative z-10 w-full h-full flex flex-col">
@@ -540,16 +1028,36 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setShowSTAI(true)}
+              onClick={handleSTAIAccessClick}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-emerald-700 transition-all"
               style={{ ...cuteTextStyle, fontWeight: 500, background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.15)' }}
             >
               <ClipboardList size={14} />
-              <span>焦虑评估</span>
+              <span>STAI-S-6</span>
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleFollowupScaleAccessClick}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-emerald-700 transition-all"
+              style={{ ...cuteTextStyle, fontWeight: 500, background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.15)' }}
+            >
+              <ClipboardList size={14} />
+              <span>PANAS</span>
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleFollowupScaleAccessClick}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-emerald-700 transition-all"
+              style={{ ...cuteTextStyle, fontWeight: 500, background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.15)' }}
+            >
+              <ClipboardList size={14} />
+              <span>事件核查表</span>
             </motion.button>
             <button onClick={handleLogoutClick} className="text-sm text-emerald-700 hover:text-emerald-900 transition-colors" style={{ fontWeight: 500 }}>退出</button>
           </div>
@@ -565,6 +1073,10 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
           <p className="text-xs text-emerald-700/80 text-center" style={{ ...cuteTextStyle, fontWeight: 400 }}>
             📋 STAI-S-6 焦虑量表需在每次会话<span style={{ fontWeight: 600 }}>开始前</span>及<span style={{ fontWeight: 600 }}>结束后</span>各填写一次
             {preSessionDone && <span className="ml-2 text-emerald-600" style={{ fontWeight: 600 }}>✓ 会话前已完成</span>}
+          </p>
+          <p className="mt-1 text-xs text-emerald-700/80 text-center" style={{ ...cuteTextStyle, fontWeight: 400 }}>
+            📋 PANAS 与事件核查表会在<span style={{ fontWeight: 600 }}>第三次会话结束并点击离开后</span>自动出现
+            <span className="ml-2 text-emerald-600" style={{ fontWeight: 600 }}>已完成会话：{completedSessionsCount}</span>
           </p>
         </motion.div>
 
