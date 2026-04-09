@@ -38,6 +38,41 @@ function recentHistory(history: TraceMessage[]): TraceMessage[] {
   return history.slice(-HISTORY_WINDOW);
 }
 
+function countUserTurns(history: TraceMessage[]): number {
+  return history.filter((message) => message.role === "user").length;
+}
+
+function buildSingleOnboardingReply(): string {
+  return "谢谢你先告诉我这些信息，我已经记下了。接下来，想请你慢慢说说，最近哪件事情最让你感到焦虑，或者最近哪一刻最让你觉得压力特别明显。我会认真听你说。";
+}
+
+function buildEarlySession(
+  session: TraceSession,
+  historyWithUser: TraceMessage[],
+  assistantReply: string,
+  focusNote: string,
+): { reply: string; session: TraceSession } {
+  const assistantEntry: TraceMessage = {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    content: assistantReply,
+    createdAt: new Date().toISOString(),
+  };
+
+  return {
+    reply: assistantReply,
+    session: {
+      ...session,
+      history: [...historyWithUser, assistantEntry],
+      state: {
+        ...session.state,
+        focusNote,
+        summary: focusNote,
+      },
+    },
+  };
+}
+
 function sanitizeMessage(content: string): string {
   return content.replace(/\r/g, "").trim();
 }
@@ -322,6 +357,15 @@ export async function runTraceTurn(args: {
         },
       },
     };
+  }
+
+  if (countUserTurns(historyWithUser) === 1) {
+    return buildEarlySession(
+      args.session,
+      historyWithUser,
+      buildSingleOnboardingReply(),
+      "TRACE 已收到用户第一条信息，正在邀请其描述最近的焦虑事件。",
+    );
   }
 
   const extracted = await callTraceJson<StateExtraction>(
