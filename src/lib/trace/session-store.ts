@@ -1,15 +1,11 @@
 import {
   appraisalKeys,
-  distanceLevels,
   problemTypes,
   reactions,
-  stages,
   strategies,
   type AppraisalMap,
-  type DistanceLevel,
   type ProblemType,
   type Reaction,
-  type Stage,
   type Strategy,
   type TraceSession,
   type TraceState,
@@ -26,10 +22,8 @@ function buildEmptyAppraisals(): AppraisalMap {
 export function buildInitialState(): TraceState {
   return {
     problemTypes: [],
-    stage: "共情澄清",
     lastStrategy: null,
     userReaction: null,
-    distanceLevel: "低",
     appraisals: buildEmptyAppraisals(),
     focusNote: "首次对话，先稳定情绪与理解处境。",
     summary: "这是一次新的 TRACE 会话，尚无历史摘要。",
@@ -49,20 +43,12 @@ function isProblemType(value: unknown): value is ProblemType {
   return typeof value === "string" && problemTypes.includes(value as ProblemType);
 }
 
-function isStage(value: unknown): value is Stage {
-  return typeof value === "string" && stages.includes(value as Stage);
-}
-
 function isStrategy(value: unknown): value is Strategy {
   return typeof value === "string" && strategies.includes(value as Strategy);
 }
 
 function isReaction(value: unknown): value is Reaction {
   return typeof value === "string" && reactions.includes(value as Reaction);
-}
-
-function isDistanceLevel(value: unknown): value is DistanceLevel {
-  return typeof value === "string" && distanceLevels.includes(value as DistanceLevel);
 }
 
 function sanitizeState(value: unknown): TraceState {
@@ -96,12 +82,8 @@ function sanitizeState(value: unknown): TraceState {
     problemTypes: Array.isArray(candidate.problemTypes)
       ? candidate.problemTypes.filter(isProblemType).slice(0, 2)
       : fallback.problemTypes,
-    stage: isStage(candidate.stage) ? candidate.stage : fallback.stage,
     lastStrategy: isStrategy(candidate.lastStrategy) ? candidate.lastStrategy : null,
     userReaction: isReaction(candidate.userReaction) ? candidate.userReaction : null,
-    distanceLevel: isDistanceLevel(candidate.distanceLevel)
-      ? candidate.distanceLevel
-      : fallback.distanceLevel,
     appraisals: sanitizedAppraisals,
     focusNote:
       typeof candidate.focusNote === "string" && candidate.focusNote.trim()

@@ -22,18 +22,12 @@ import type {
 } from "@/lib/trace/types";
 import {
   appraisalKeys,
-  distanceLevels,
-  languageMoves,
   problemTypes,
   reactions,
-  stages,
   strategies,
   type AppraisalMap,
-  type DistanceLevel,
-  type LanguageMove,
   type ProblemType,
   type Reaction,
-  type Stage,
   type Strategy,
 } from "@/lib/trace/types";
 
@@ -65,7 +59,7 @@ function hasProfileInfo(content: string): boolean {
 
 function hasAnxietyEvent(content: string): boolean {
   const text = content.replace(/\s+/g, "");
-  return /(焦虑|担心|压力|烦恼|困扰|睡不着|失眠|害怕|紧张|崩溃|难受|不安|内耗|情绪|未来|考试|学业|人际|家庭|工作|就业)/.test(text);
+  return /(担心|压力|烦恼|困扰|睡不着|失眠|害怕|崩溃|不安|内耗|未来|考试|学业|人际|家庭|工作|就业|论文|保研|绩点|实习|求职|室友|恋爱|分手|父母|老师|同学)/.test(text);
 }
 
 function buildOnboardingReply(kind: "profile" | "concern", userMessage: string): string {
@@ -191,20 +185,8 @@ function isReaction(value: unknown): value is Reaction {
   return typeof value === "string" && reactions.includes(value as Reaction);
 }
 
-function isDistanceLevel(value: unknown): value is DistanceLevel {
-  return typeof value === "string" && distanceLevels.includes(value as DistanceLevel);
-}
-
-function isStage(value: unknown): value is Stage {
-  return typeof value === "string" && stages.includes(value as Stage);
-}
-
 function isStrategy(value: unknown): value is Strategy {
   return typeof value === "string" && strategies.includes(value as Strategy);
-}
-
-function isLanguageMove(value: unknown): value is LanguageMove {
-  return typeof value === "string" && languageMoves.includes(value as LanguageMove);
 }
 
 function normalizeAppraisals(source: unknown, fallback: AppraisalMap): AppraisalMap {
@@ -250,9 +232,6 @@ function normalizeStateExtraction(
     userReaction: isReaction(raw.userReaction)
       ? raw.userReaction
       : session.state.userReaction || "无明显反应",
-    distanceLevel: isDistanceLevel(raw.distanceLevel)
-      ? raw.distanceLevel
-      : session.state.distanceLevel,
     focusNote:
       typeof raw.focusNote === "string" && raw.focusNote.trim()
         ? raw.focusNote.trim()
@@ -262,16 +241,10 @@ function normalizeStateExtraction(
 }
 
 function normalizePlan(raw: StrategyPlan, session: TraceSession): StrategyPlan {
-  const moves = Array.isArray(raw.languageMoves)
-    ? raw.languageMoves.filter(isLanguageMove).slice(0, 2)
-    : [];
-
   return {
-    stage: isStage(raw.stage) ? raw.stage : session.state.stage,
     strategy: isStrategy(raw.strategy)
       ? raw.strategy
       : session.state.lastStrategy || "separating oneself",
-    languageMoves: moves.length > 0 ? moves : ["提供新视角"],
     rationale:
       typeof raw.rationale === "string" && raw.rationale.trim()
         ? raw.rationale.trim()
@@ -295,13 +268,8 @@ function normalizeValidation(raw: ValidationResult, candidate: string): Validati
 function normalizeUpdate(
   raw: StateUpdateResult,
   session: TraceSession,
-  plan: StrategyPlan,
 ): StateUpdateResult {
   return {
-    stage: isStage(raw.stage) ? raw.stage : plan.stage,
-    distanceLevel: isDistanceLevel(raw.distanceLevel)
-      ? raw.distanceLevel
-      : session.state.distanceLevel,
     focusNote:
       typeof raw.focusNote === "string" && raw.focusNote.trim()
         ? raw.focusNote.trim()
@@ -315,14 +283,13 @@ function normalizeUpdate(
 
 function normalizeSummary(
   raw: SummaryResult,
-  session: TraceSession,
   update: StateUpdateResult,
 ): SummaryResult {
   return {
     summary:
       typeof raw.summary === "string" && raw.summary.trim()
         ? raw.summary.trim()
-        : `${update.summaryHint} 当前阶段：${update.stage}。`,
+        : update.summaryHint,
   };
 }
 
@@ -411,7 +378,6 @@ export async function runTraceTurn(args: {
         history: [...historyWithUser, assistantEntry],
         state: {
           ...args.session.state,
-          stage: "共情澄清",
           userReaction: "情绪升级",
           focusNote: `触发安全分流：${safety.reason}`,
           summary: `最近一轮触发安全分流，原因：${safety.reason}`,
@@ -499,7 +465,7 @@ export async function runTraceTurn(args: {
     }),
     0.1,
   );
-  const normalizedUpdate = normalizeUpdate(update, args.session, normalizedPlan);
+  const normalizedUpdate = normalizeUpdate(update, args.session);
 
   const summary = await callTraceJson<SummaryResult>(
     TRACE_PROMPT_LIBRARY.identity,
@@ -510,7 +476,7 @@ export async function runTraceTurn(args: {
     }),
     0.1,
   );
-  const normalizedSummary = normalizeSummary(summary, args.session, normalizedUpdate);
+  const normalizedSummary = normalizeSummary(summary, normalizedUpdate);
 
   const nextSession: TraceSession = {
     ...args.session,
@@ -519,8 +485,6 @@ export async function runTraceTurn(args: {
       ...args.session.state,
       problemTypes: normalizedExtracted.problemTypes,
       userReaction: normalizedExtracted.userReaction,
-      distanceLevel: normalizedUpdate.distanceLevel,
-      stage: normalizedUpdate.stage,
       lastStrategy: normalizedPlan.strategy,
       appraisals: normalizedExtracted.appraisals,
       focusNote: normalizedUpdate.focusNote,
