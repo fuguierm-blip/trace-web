@@ -56,6 +56,7 @@ export async function POST(request: Request) {
             username,
             isPilot,
             session: savedSession,
+            turnDiagnostics: result.diagnostics,
           });
 
           push({

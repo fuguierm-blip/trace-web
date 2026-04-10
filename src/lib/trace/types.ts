@@ -72,6 +72,11 @@ export interface TraceSession {
   updatedAt: string;
 }
 
+export interface TracePhaseEvent {
+  phase: string;
+  at: string;
+}
+
 export interface SafetyDecision {
   riskLevel: "normal" | "high";
   reason: string;
@@ -103,4 +108,36 @@ export interface StateUpdateResult {
 
 export interface SummaryResult {
   summary: string;
+}
+
+export interface TraceValidationAttempt {
+  attempt: number;
+  candidate: string;
+  pass: boolean;
+  issues: string[];
+  revisedResponse: string;
+}
+
+export interface TraceTurnDiagnostics {
+  turnId: string;
+  sessionId: string;
+  userMessageId: string;
+  userMessage: string;
+  startedAt: string;
+  phases: TracePhaseEvent[];
+  shortHistory: TraceMessage[];
+  inputState: TraceState;
+  safety: SafetyDecision;
+  onboardingReply: string | null;
+  extraction: StateExtraction | null;
+  plan: StrategyPlan | null;
+  responsePrompt: string | null;
+  draftedReply: string | null;
+  validationAttempts: TraceValidationAttempt[];
+  finalReply: string;
+  assistantMessageId: string;
+  assistantCreatedAt: string;
+  stateUpdate: StateUpdateResult | null;
+  summaryResult: SummaryResult | null;
+  outputState: TraceState;
 }

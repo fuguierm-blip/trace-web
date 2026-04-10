@@ -1,5 +1,5 @@
 import { getRedisClient } from "@/lib/trace/redis-client";
-import type { TraceSession } from "@/lib/trace/types";
+import type { TraceSession, TraceTurnDiagnostics } from "@/lib/trace/types";
 
 export type AccountEventType =
   | "consent"
@@ -20,6 +20,7 @@ export interface StoredAccountSession {
   sessionId: string;
   savedAt: string;
   chat: TraceSession;
+  turnDiagnostics: TraceTurnDiagnostics[];
 }
 
 export interface AccountRecord {
@@ -94,6 +95,9 @@ function sanitizeStoredSession(value: unknown): StoredAccountSession | null {
     sessionId: candidate.sessionId,
     savedAt: candidate.savedAt,
     chat: candidate.chat as TraceSession,
+    turnDiagnostics: Array.isArray(candidate.turnDiagnostics)
+      ? (candidate.turnDiagnostics as TraceTurnDiagnostics[])
+      : [],
   };
 }
 
@@ -224,13 +228,20 @@ export async function upsertAccountSession(options: {
   username: string;
   isPilot: boolean;
   session: TraceSession;
+  turnDiagnostics?: TraceTurnDiagnostics | null;
 }): Promise<AccountRecord> {
   const record = await restoreAccountRecord(options.username, options.isPilot);
   const savedAt = new Date().toISOString();
+  const existingDiagnostics =
+    record.sessions.find((item) => item.sessionId === options.session.sessionId)?.turnDiagnostics || [];
+  const nextDiagnostics = options.turnDiagnostics
+    ? [...existingDiagnostics, options.turnDiagnostics]
+    : existingDiagnostics;
   const nextEntry: StoredAccountSession = {
     sessionId: options.session.sessionId,
     savedAt,
     chat: options.session,
+    turnDiagnostics: nextDiagnostics,
   };
   const existingIndex = record.sessions.findIndex(
     (item) => item.sessionId === options.session.sessionId,

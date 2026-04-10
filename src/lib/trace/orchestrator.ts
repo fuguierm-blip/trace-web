@@ -16,8 +16,11 @@ import type {
   StateUpdateResult,
   StrategyPlan,
   SummaryResult,
+  TracePhaseEvent,
   TraceMessage,
   TraceSession,
+  TraceTurnDiagnostics,
+  TraceValidationAttempt,
   ValidationResult,
 } from "@/lib/trace/types";
 import {
@@ -272,10 +275,12 @@ async function validateOrRewrite(args: {
   userMessage: string;
   plan: StrategyPlan;
   candidate: string;
+  attempts: TraceValidationAttempt[];
 }): Promise<string> {
   let candidate = enforceResponseShape(args.candidate);
 
   for (let attempt = 0; attempt < VALIDATION_RETRY_LIMIT; attempt += 1) {
+    const attemptNumber = attempt + 1;
     const result = await callTraceJson<ValidationResult>(
       TRACE_PROMPT_LIBRARY.identity,
       buildValidatorPrompt({
@@ -290,6 +295,13 @@ async function validateOrRewrite(args: {
 
     const normalized = normalizeValidation(result, candidate);
     const revised = enforceResponseShape(normalized.revisedResponse);
+    args.attempts.push({
+      attempt: attemptNumber,
+      candidate,
+      pass: normalized.pass,
+      issues: normalized.issues,
+      revisedResponse: revised,
+    });
     if (normalized.pass) {
       return revised;
     }
@@ -305,7 +317,17 @@ export async function runTraceTurn(args: {
   onResponseChunk?: (chunk: string) => Promise<void> | void;
   onResponseReset?: () => Promise<void> | void;
   onStatus?: (phase: string) => Promise<void> | void;
-}): Promise<{ reply: string; session: TraceSession }> {
+}): Promise<{ reply: string; session: TraceSession; diagnostics: TraceTurnDiagnostics }> {
+  const turnId = crypto.randomUUID();
+  const startedAt = new Date().toISOString();
+  const phases: TracePhaseEvent[] = [];
+  const pushPhase = async (phase: string) => {
+    phases.push({
+      phase,
+      at: new Date().toISOString(),
+    });
+    await args.onStatus?.(phase);
+  };
   const userMessage = sanitizeMessage(args.userMessage);
   const userEntry: TraceMessage = {
     id: crypto.randomUUID(),
@@ -316,8 +338,9 @@ export async function runTraceTurn(args: {
 
   const historyWithUser = [...args.session.history, userEntry];
   const shortHistory = recentHistory(historyWithUser);
+  const inputState = structuredClone(args.session.state);
 
-  await args.onStatus?.("safety");
+  await pushPhase("safety");
 
   const safety = await callTraceJson<SafetyDecision>(
     TRACE_PROMPT_LIBRARY.identity,
@@ -349,31 +372,83 @@ export async function runTraceTurn(args: {
       createdAt: new Date().toISOString(),
     };
 
+    const outputState = {
+      ...args.session.state,
+      userReaction: "情绪升级" as const,
+      focusNote: `触发安全分流：${safety.reason}`,
+      summary: `最近一轮触发安全分流，原因：${safety.reason}`,
+    };
+
     return {
       reply: safeReply,
       session: {
         ...args.session,
         history: [...historyWithUser, assistantEntry],
-        state: {
-          ...args.session.state,
-          userReaction: "情绪升级",
-          focusNote: `触发安全分流：${safety.reason}`,
-          summary: `最近一轮触发安全分流，原因：${safety.reason}`,
-        },
+        state: outputState,
+      },
+      diagnostics: {
+        turnId,
+        sessionId: args.session.sessionId,
+        userMessageId: userEntry.id,
+        userMessage,
+        startedAt,
+        phases,
+        shortHistory,
+        inputState,
+        safety,
+        onboardingReply: null,
+        extraction: null,
+        plan: null,
+        responsePrompt: null,
+        draftedReply: safeReply,
+        validationAttempts: [],
+        finalReply: safeReply,
+        assistantMessageId: assistantEntry.id,
+        assistantCreatedAt: assistantEntry.createdAt,
+        stateUpdate: null,
+        summaryResult: null,
+        outputState,
       },
     };
   }
 
   if (countUserTurns(historyWithUser) === 1) {
-    return buildEarlySession(
+    const early = buildEarlySession(
       args.session,
       historyWithUser,
       buildSingleOnboardingReply(),
       "TRACE 已收到用户第一条信息，正在邀请其描述最近的焦虑事件。",
     );
+    const assistantEntry = early.session.history[early.session.history.length - 1];
+    return {
+      ...early,
+      diagnostics: {
+        turnId,
+        sessionId: args.session.sessionId,
+        userMessageId: userEntry.id,
+        userMessage,
+        startedAt,
+        phases,
+        shortHistory,
+        inputState,
+        safety,
+        onboardingReply: early.reply,
+        extraction: null,
+        plan: null,
+        responsePrompt: null,
+        draftedReply: early.reply,
+        validationAttempts: [],
+        finalReply: early.reply,
+        assistantMessageId: assistantEntry.id,
+        assistantCreatedAt: assistantEntry.createdAt,
+        stateUpdate: null,
+        summaryResult: null,
+        outputState: early.session.state,
+      },
+    };
   }
 
-  await args.onStatus?.("analysis");
+  await pushPhase("analysis");
 
   const extracted = await callTraceJson<StateExtraction>(
     TRACE_PROMPT_LIBRARY.identity,
@@ -386,7 +461,7 @@ export async function runTraceTurn(args: {
   );
   const normalizedExtracted = normalizeStateExtraction(extracted, args.session);
 
-  await args.onStatus?.("planning");
+  await pushPhase("planning");
 
   const plan = await callTraceJson<StrategyPlan>(
     TRACE_PROMPT_LIBRARY.identity,
@@ -407,7 +482,7 @@ export async function runTraceTurn(args: {
     userMessage,
   });
 
-  await args.onStatus?.("responding");
+  await pushPhase("responding");
 
   const draftedReply =
     args.onResponseChunk
@@ -420,7 +495,9 @@ export async function runTraceTurn(args: {
         )
       : await callTraceText(TRACE_PROMPT_LIBRARY.identity, responsePrompt, 0.6);
 
-  await args.onStatus?.("finalizing");
+  await pushPhase("finalizing");
+
+  const validationAttempts: TraceValidationAttempt[] = [];
 
   const finalReply = await validateOrRewrite({
     history: shortHistory,
@@ -428,6 +505,7 @@ export async function runTraceTurn(args: {
     userMessage,
     plan: normalizedPlan,
     candidate: draftedReply,
+    attempts: validationAttempts,
   });
 
   const assistantEntry: TraceMessage = {
@@ -461,22 +539,47 @@ export async function runTraceTurn(args: {
   );
   const normalizedSummary = normalizeSummary(summary, normalizedUpdate);
 
+  const outputState = {
+    ...args.session.state,
+    problemTypes: normalizedExtracted.problemTypes,
+    userReaction: normalizedExtracted.userReaction,
+    lastStrategy: normalizedPlan.strategy,
+    appraisals: normalizedExtracted.appraisals,
+    focusNote: normalizedUpdate.focusNote,
+    summary: normalizedSummary.summary,
+  };
+
   const nextSession: TraceSession = {
     ...args.session,
     history: [...historyWithUser, assistantEntry],
-    state: {
-      ...args.session.state,
-      problemTypes: normalizedExtracted.problemTypes,
-      userReaction: normalizedExtracted.userReaction,
-      lastStrategy: normalizedPlan.strategy,
-      appraisals: normalizedExtracted.appraisals,
-      focusNote: normalizedUpdate.focusNote,
-      summary: normalizedSummary.summary,
-    },
+    state: outputState,
   };
 
   return {
     reply: finalReply,
     session: nextSession,
+    diagnostics: {
+      turnId,
+      sessionId: args.session.sessionId,
+      userMessageId: userEntry.id,
+      userMessage,
+      startedAt,
+      phases,
+      shortHistory,
+      inputState,
+      safety,
+      onboardingReply: null,
+      extraction: normalizedExtracted,
+      plan: normalizedPlan,
+      responsePrompt,
+      draftedReply,
+      validationAttempts,
+      finalReply,
+      assistantMessageId: assistantEntry.id,
+      assistantCreatedAt: assistantEntry.createdAt,
+      stateUpdate: normalizedUpdate,
+      summaryResult: normalizedSummary,
+      outputState,
+    },
   };
 }
