@@ -110,7 +110,7 @@ const cuteTextStyle = {
 const TARGET_SESSIONS_FOR_FOLLOWUP = 3;
 const VALID_TEST_ACCOUNTS = Array.from({ length: 10 }, (_, index) => String(index + 1));
 const SESSION_EFFECT_NOTICE =
-  'TRACE 的目标是帮助您调节焦虑情绪，会话结束后您将重新做 STAI-S-6 量表，以检验 TRACE 的效果。';
+  'TRACE 的目标是帮助您调节焦虑情绪，会话结束后您将重新做 STAI-S-6 量表，以检验 TRACE 的效果。希望在接下来两周的旅程中能够帮助疗愈您的焦虑。';
 const RETURNING_PROMPT =
   '欢迎回来，您最近有感到焦虑的事情吗，或者你想谈谈上次聊到的焦虑问题有所缓解吗？';
 
@@ -2074,7 +2074,9 @@ function ChatInterface({
       setShowPreSTAI(false);
       setPreSessionDone(true);
       startSessionTimer();
-      setNoticeMessage(SESSION_EFFECT_NOTICE);
+      if (completedSessionsCount === 0) {
+        setNoticeMessage(SESSION_EFFECT_NOTICE);
+      }
     } catch (error) {
       showSaveError(error, '会前 STAI-S-6 保存失败，请稍后重试。');
     }
