@@ -21,6 +21,7 @@ function isAccountEventType(value: unknown): value is AccountEventType {
     value === "pilot-basic-info" ||
     value === "stai" ||
     value === "panas" ||
+    value === "gad-7" ||
     value === "event-checklist" ||
     value === "pilot-feedback"
   );

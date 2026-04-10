@@ -23,6 +23,11 @@ interface PANASResult {
   timestamp: Date;
 }
 
+interface GAD7Result {
+  answers: number[];
+  timestamp: Date;
+}
+
 interface EventChecklistResult {
   eventNature: number;
   categories: string[];
@@ -91,6 +96,8 @@ const cuteTextStyle = {
 const COMPLETED_SESSIONS_KEY = 'trace-completed-sessions-count';
 const TARGET_SESSIONS_FOR_FOLLOWUP = 3;
 const VALID_TEST_ACCOUNTS = Array.from({ length: 10 }, (_, index) => String(index + 1));
+const SESSION_EFFECT_NOTICE =
+  'TRACE 的目标是帮助您调节焦虑情绪，会话结束后您将重新做 STAI-S-6 量表，以检验 TRACE 的效果。';
 
 const consentIntroParagraphs = [
   'TRACE 是一个面向大学生的文本对话系统，主要用于在日常交流中提供支持，帮助用户缓解焦虑、梳理当前困扰，并尝试换一个角度理解问题。TRACE 不提供临床诊断，也不能替代心理治疗或医疗服务。本次试测主要用于检查系统流程、会话体验与研究材料是否清晰可用。',
@@ -752,6 +759,23 @@ const panasQuestions = [
   '害怕的',
 ];
 
+const gad7Questions = [
+  '感到紧张、不安或烦躁',
+  '无法停止或者控制忧虑',
+  '对各种各样的事情担忧过多',
+  '很难放松下来',
+  '由于不安而无法静坐',
+  '变得容易烦恼或急躁',
+  '感到好像有什么可怕的事将要发生',
+];
+
+const gad7Options = [
+  { value: 0, label: '完全没有' },
+  { value: 1, label: '几天' },
+  { value: 2, label: '一半以上天数' },
+  { value: 3, label: '几乎每天' },
+];
+
 const panasOptions = [
   { value: 1, label: '几乎没有' },
   { value: 2, label: '比较少' },
@@ -1281,6 +1305,126 @@ function PANASQuestionnaire({ onSubmit, onClose }: { onSubmit: (result: PANASRes
   );
 }
 
+function GAD7Questionnaire({ onSubmit, onClose }: { onSubmit: (result: GAD7Result) => void; onClose?: () => void }) {
+  const [answers, setAnswers] = useState<number[]>(Array(7).fill(-1));
+  const allAnswered = answers.every((answer) => answer >= 0);
+
+  const handleSelect = (questionIndex: number, value: number) => {
+    setAnswers((previous) => {
+      const next = [...previous];
+      next[questionIndex] = value;
+      return next;
+    });
+  };
+
+  const handleSubmit = () => {
+    if (!allAnswered) return;
+    onSubmit({ answers: [...answers], timestamp: new Date() });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl relative"
+        style={{ background: 'linear-gradient(to bottom, #f0fdf4, #ffffff)', boxShadow: '0 25px 60px rgba(0,0,0,0.15)' }}
+      >
+        <div className="sticky top-0 z-10 px-6 pt-6 pb-4 rounded-t-3xl" style={{ background: 'linear-gradient(to bottom, #f0fdf4, rgba(240,253,244,0.96))', backdropFilter: 'blur(10px)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                <ClipboardList size={16} className="text-white" />
+              </div>
+              <h2 className="text-emerald-900" style={{ ...cuteTextStyle, fontWeight: 700, fontSize: '1.1rem' }}>焦虑感受回顾</h2>
+            </div>
+            {onClose && (
+              <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-emerald-100 transition-colors">
+                <X size={18} className="text-emerald-600" />
+              </button>
+            )}
+          </div>
+          <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(5, 150, 105, 0.08)' }}>
+            <p className="text-xs text-emerald-800" style={{ ...cuteTextStyle, fontWeight: 500, lineHeight: 1.7 }}>
+              请回想您在<span style={{ color: '#059669', fontWeight: 700 }}>过去两周</span>内的真实状态，看看下面这些情况出现了多少次。
+              请尽量按照第一感觉作答，不需要刻意寻找“标准答案”。
+            </p>
+            <p className="mt-2 text-xs text-emerald-700/80" style={{ ...cuteTextStyle, fontWeight: 500, lineHeight: 1.7 }}>
+              评分方式：0 = 完全没有，1 = 几天，2 = 一半以上天数，3 = 几乎每天。
+            </p>
+          </div>
+        </div>
+
+        <div className="px-6 pb-6 flex flex-col gap-4">
+          {gad7Questions.map((question, questionIndex) => (
+            <motion.div
+              key={question}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: questionIndex * 0.03 }}
+              className="rounded-2xl p-4"
+              style={{
+                background: answers[questionIndex] >= 0 ? 'rgba(5, 150, 105, 0.06)' : 'rgba(255,255,255,0.82)',
+                border: `1.5px solid ${answers[questionIndex] >= 0 ? 'rgba(5, 150, 105, 0.2)' : 'rgba(0,0,0,0.06)'}`,
+              }}
+            >
+              <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 text-xs text-white" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                  {questionIndex + 1}
+                </span>
+                {question}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {gad7Options.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => handleSelect(questionIndex, option.value)}
+                    className="py-2 px-2 rounded-xl text-xs transition-all"
+                    style={{
+                      ...cuteTextStyle,
+                      fontWeight: answers[questionIndex] === option.value ? 600 : 400,
+                      background: answers[questionIndex] === option.value ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.9)',
+                      color: answers[questionIndex] === option.value ? 'white' : '#065f46',
+                      border: `1.5px solid ${answers[questionIndex] === option.value ? 'transparent' : 'rgba(5,150,105,0.15)'}`,
+                      boxShadow: answers[questionIndex] === option.value ? '0 4px 12px rgba(5,150,105,0.3)' : 'none',
+                    }}
+                  >
+                    <div style={{ fontSize: '1rem', marginBottom: '2px' }}>{option.value}</div>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          ))}
+
+          <motion.button
+            whileHover={allAnswered ? { scale: 1.03 } : {}}
+            whileTap={allAnswered ? { scale: 0.97 } : {}}
+            onClick={handleSubmit}
+            disabled={!allAnswered}
+            className="w-full py-3 rounded-2xl text-white mt-2 transition-all disabled:opacity-40"
+            style={{
+              ...cuteTextStyle,
+              fontWeight: 600,
+              background: allAnswered ? 'linear-gradient(135deg, #059669 0%, #047857 100%)' : 'rgba(5,150,105,0.3)',
+              boxShadow: allAnswered ? '0 10px 30px rgba(5, 150, 105, 0.35)' : 'none',
+            }}
+          >
+            {allAnswered ? '提交回顾' : `请完成所有题目（${answers.filter((answer) => answer >= 0).length}/7）`}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 function EventChecklistQuestionnaire({ onSubmit, onClose }: { onSubmit: (result: EventChecklistResult) => void; onClose?: () => void }) {
   const [eventNature, setEventNature] = useState(0);
   const [categories, setCategories] = useState<string[]>([]);
@@ -1539,7 +1683,7 @@ function ChatInterface({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [exitStep, setExitStep] = useState<'idle' | 'pilot-feedback' | 'panas' | 'events'>('idle');
+  const [exitStep, setExitStep] = useState<'idle' | 'pilot-feedback' | 'panas' | 'gad7' | 'events'>('idle');
   const [showPostSTAI, setShowPostSTAI] = useState(false);
   const [preSessionDone, setPreSessionDone] = useState(false);
   const [showConsent, setShowConsent] = useState(account.isPilot);
@@ -1557,7 +1701,7 @@ function ChatInterface({
   const visibleMessages = [welcomeMessage, ...messages];
 
   const persistAccountEvent = async (
-    eventType: 'consent' | 'pilot-basic-info' | 'stai' | 'panas' | 'event-checklist' | 'pilot-feedback',
+    eventType: 'consent' | 'pilot-basic-info' | 'stai' | 'panas' | 'gad-7' | 'event-checklist' | 'pilot-feedback',
     payload: unknown,
   ) => {
     const response = await fetch('/api/account-record', {
@@ -1810,6 +1954,7 @@ function ChatInterface({
       setShowPreSTAI(false);
       setPreSessionDone(true);
       startSessionTimer();
+      setNoticeMessage(SESSION_EFFECT_NOTICE);
     } catch (error) {
       showSaveError(error, '会前 STAI-S-6 保存失败，请稍后重试。');
     }
@@ -1838,9 +1983,18 @@ function ChatInterface({
   const handlePANASSubmit = async (result: PANASResult) => {
     try {
       await persistAccountEvent('panas', result);
-      setExitStep('events');
+      setExitStep('gad7');
     } catch (error) {
       showSaveError(error, 'PANAS 保存失败，请稍后重试。');
+    }
+  };
+
+  const handleGAD7Submit = async (result: GAD7Result) => {
+    try {
+      await persistAccountEvent('gad-7', result);
+      setExitStep('events');
+    } catch (error) {
+      showSaveError(error, 'GAD-7 保存失败，请稍后重试。');
     }
   };
 
@@ -1921,6 +2075,15 @@ function ChatInterface({
       </AnimatePresence>
 
       <AnimatePresence>
+        {exitStep === 'gad7' && (
+          <GAD7Questionnaire
+            onSubmit={handleGAD7Submit}
+            onClose={handleExitFlowClose}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {exitStep === 'events' && (
           <EventChecklistQuestionnaire
             onSubmit={handleEventChecklistSubmit}
@@ -1992,6 +2155,16 @@ function ChatInterface({
                   style={{ ...cuteTextStyle, fontWeight: 500, background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.15)' }}
                 >
                   <ClipboardList size={14} />
+                  <span>GAD-7</span>
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleFollowupScaleAccessClick}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-emerald-700 transition-all"
+                  style={{ ...cuteTextStyle, fontWeight: 500, background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.15)' }}
+                >
+                  <ClipboardList size={14} />
                   <span>事件核查表</span>
                 </motion.button>
               </>
@@ -2013,7 +2186,7 @@ function ChatInterface({
           </p>
           {!account.isPilot && (
             <p className="mt-1 text-xs text-emerald-700/80 text-center" style={{ ...cuteTextStyle, fontWeight: 400 }}>
-              📋 PANAS 与事件核查表会在<span style={{ fontWeight: 600 }}>第三次会话结束并点击离开后</span>自动出现
+              📋 PANAS、GAD-7 与事件核查表会在<span style={{ fontWeight: 600 }}>第三次会话结束并点击离开后</span>自动出现
               <span className="ml-2 text-emerald-600" style={{ fontWeight: 600 }}>已完成会话：{completedSessionsCount}</span>
             </p>
           )}

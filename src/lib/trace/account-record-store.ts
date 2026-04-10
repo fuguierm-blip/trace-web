@@ -6,6 +6,7 @@ export type AccountEventType =
   | "pilot-basic-info"
   | "stai"
   | "panas"
+  | "gad-7"
   | "event-checklist"
   | "pilot-feedback";
 
@@ -33,6 +34,7 @@ export interface AccountRecord {
   pilotBasicInfoRecords: StoredAccountEvent[];
   staiRecords: StoredAccountEvent[];
   panasRecords: StoredAccountEvent[];
+  gad7Records: StoredAccountEvent[];
   eventChecklistRecords: StoredAccountEvent[];
   pilotFeedbackRecords: StoredAccountEvent[];
 }
@@ -53,6 +55,7 @@ function buildInitialAccountRecord(username: string, isPilot: boolean): AccountR
     pilotBasicInfoRecords: [],
     staiRecords: [],
     panasRecords: [],
+    gad7Records: [],
     eventChecklistRecords: [],
     pilotFeedbackRecords: [],
   };
@@ -142,6 +145,7 @@ function sanitizeAccountRecord(value: unknown, username: string, isPilot: boolea
     pilotBasicInfoRecords: sanitizeEventList(candidate.pilotBasicInfoRecords),
     staiRecords: sanitizeEventList(candidate.staiRecords),
     panasRecords: sanitizeEventList(candidate.panasRecords),
+    gad7Records: sanitizeEventList(candidate.gad7Records),
     eventChecklistRecords: sanitizeEventList(candidate.eventChecklistRecords),
     pilotFeedbackRecords: sanitizeEventList(candidate.pilotFeedbackRecords),
   };
@@ -163,6 +167,7 @@ function getCollectionKey(eventType: AccountEventType): keyof Pick<
   | "pilotBasicInfoRecords"
   | "staiRecords"
   | "panasRecords"
+  | "gad7Records"
   | "eventChecklistRecords"
   | "pilotFeedbackRecords"
 > {
@@ -175,6 +180,8 @@ function getCollectionKey(eventType: AccountEventType): keyof Pick<
       return "staiRecords";
     case "panas":
       return "panasRecords";
+    case "gad-7":
+      return "gad7Records";
     case "event-checklist":
       return "eventChecklistRecords";
     case "pilot-feedback":
