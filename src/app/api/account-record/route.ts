@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   appendAccountEvent,
-  deleteAccountRecord,
   type AccountEventType,
   restoreAccountRecord,
   upsertAccountSession,
@@ -12,7 +11,7 @@ interface AccountRecordRequest {
   username?: string;
   isPilot?: boolean;
   sessionId?: string;
-  eventType?: AccountEventType | "sync-session" | "load-record" | "reset-record";
+  eventType?: AccountEventType | "sync-session" | "load-record";
   payload?: unknown;
   session?: TraceSession;
 }
@@ -62,11 +61,6 @@ export async function POST(request: Request) {
     if (body.eventType === "load-record") {
       const record = await restoreAccountRecord(username, isPilot);
       return NextResponse.json({ ok: true, record });
-    }
-
-    if (body.eventType === "reset-record") {
-      const result = await deleteAccountRecord(username);
-      return NextResponse.json({ ok: true, result });
     }
 
     if (!isAccountEventType(body.eventType)) {

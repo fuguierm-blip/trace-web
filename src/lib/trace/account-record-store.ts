@@ -43,39 +43,6 @@ function getAccountRedisKey(username: string): string {
   return `trace:account:${username}`;
 }
 
-export async function deleteAccountRecord(username: string): Promise<{
-  deletedAccount: boolean;
-  deletedSessionIds: string[];
-}> {
-  const client = await getRedisClient();
-  const raw = await client.get(getAccountRedisKey(username));
-  if (!raw) {
-    return {
-      deletedAccount: false,
-      deletedSessionIds: [],
-    };
-  }
-
-  const record = sanitizeAccountRecord(JSON.parse(raw), username, false);
-  const deletedSessionIds: string[] = [];
-
-  for (const session of record.sessions) {
-    if (!session.sessionId) {
-      continue;
-    }
-    const deleted = await client.del(`trace:session:${session.sessionId}`);
-    if (deleted > 0) {
-      deletedSessionIds.push(session.sessionId);
-    }
-  }
-
-  const deletedAccount = (await client.del(getAccountRedisKey(username))) > 0;
-  return {
-    deletedAccount,
-    deletedSessionIds,
-  };
-}
-
 function buildInitialAccountRecord(username: string, isPilot: boolean): AccountRecord {
   const now = new Date().toISOString();
   return {
