@@ -345,7 +345,7 @@ function LoginScreen({ onLogin }: { onLogin: (account: UserAccount) => void }) {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="请输入 1 到 10"
+                placeholder="请输入您的账号"
                 className="w-full pl-11 pr-4 py-3 rounded-2xl text-[15px] text-emerald-950 placeholder-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 transition-all"
                 style={{ ...cuteTextStyle, fontWeight: 400, background: 'rgba(255,255,255,0.85)', border: '1.5px solid rgba(5, 150, 105, 0.2)', backdropFilter: 'blur(10px)' }}
               />
@@ -1114,7 +1114,7 @@ function PilotFeedbackQuestionnaire({
             />
             <div className="mt-4">
               <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
-                如果是“陶瓷杯 + 橡皮擦 + 随身笔记本”的组合，你会打几分？（满分 10 分）
+                如果是“多肉盆栽+卡套+随身笔记本+挂件”的组合，你会打几分？（满分 10 分）
               </p>
               <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
                 {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
