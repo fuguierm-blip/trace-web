@@ -32,6 +32,15 @@ interface EventChecklistResult {
   timestamp: Date;
 }
 
+interface PilotFeedbackResult {
+  agreementAnswers: number[];
+  mostHelpfulPart: string;
+  needsImprovement: string;
+  preferredReward: string;
+  comboRewardScore: number;
+  timestamp: Date;
+}
+
 interface ChatStreamEvent {
   type: 'status' | 'chunk' | 'replace' | 'done' | 'error';
   phase?: string;
@@ -165,6 +174,23 @@ const pilotPressureSourceOptions = [
 ];
 
 const pilotStressLevelOptions = ['没有', '偶尔', '有时', '经常'];
+const pilotFeedbackAgreementOptions = [
+  { value: 1, label: '非常不同意' },
+  { value: 2, label: '不同意' },
+  { value: 3, label: '一般' },
+  { value: 4, label: '同意' },
+  { value: 5, label: '非常同意' },
+];
+
+const pilotFeedbackStatements = [
+  '我觉得这次 TRACE 会话整体上容易理解。',
+  '我觉得 TRACE 的回复总体比较自然。',
+  '我觉得 TRACE 大体能理解我想表达的重点。',
+  '我觉得这次会话对我有一定帮助。',
+  '我觉得这次会话结束后，我的情绪比开始时更稳定一些。',
+  '如果以后有需要，我愿意再次使用类似的系统。',
+  '如果以后还有类似研究，我愿意继续参加。',
+];
 
 // ==================== Eye Following Card ====================
 function EyeFollowingCard() {
@@ -918,6 +944,223 @@ function NoticeDialog({ message, onClose }: { message: string; onClose: () => vo
   );
 }
 
+function PilotFeedbackQuestionnaire({
+  onSubmit,
+  onClose,
+}: {
+  onSubmit: (result: PilotFeedbackResult) => void;
+  onClose?: () => void;
+}) {
+  const [agreementAnswers, setAgreementAnswers] = useState<number[]>(Array(7).fill(0));
+  const [mostHelpfulPart, setMostHelpfulPart] = useState('');
+  const [needsImprovement, setNeedsImprovement] = useState('');
+  const [preferredReward, setPreferredReward] = useState('');
+  const [comboRewardScore, setComboRewardScore] = useState<number | null>(null);
+
+  const allAnswered =
+    agreementAnswers.every((answer) => answer > 0) &&
+    mostHelpfulPart.trim() !== '' &&
+    needsImprovement.trim() !== '' &&
+    preferredReward.trim() !== '' &&
+    comboRewardScore !== null;
+
+  const handleAgreementSelect = (questionIndex: number, value: number) => {
+    setAgreementAnswers((previous) => {
+      const next = [...previous];
+      next[questionIndex] = value;
+      return next;
+    });
+  };
+
+  const handleSubmit = () => {
+    if (!allAnswered || comboRewardScore === null) return;
+    onSubmit({
+      agreementAnswers: [...agreementAnswers],
+      mostHelpfulPart: mostHelpfulPart.trim(),
+      needsImprovement: needsImprovement.trim(),
+      preferredReward: preferredReward.trim(),
+      comboRewardScore,
+      timestamp: new Date(),
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
+    >
+      <motion.div
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl relative"
+        style={{ background: 'linear-gradient(to bottom, #f0fdf4, #ffffff)', boxShadow: '0 25px 60px rgba(0,0,0,0.15)' }}
+      >
+        <div className="sticky top-0 z-10 px-6 pt-6 pb-4 rounded-t-3xl" style={{ background: 'linear-gradient(to bottom, #f0fdf4, rgba(240,253,244,0.96))', backdropFilter: 'blur(10px)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                <ClipboardList size={16} className="text-white" />
+              </div>
+              <h2 className="text-emerald-900" style={{ ...cuteTextStyle, fontWeight: 700, fontSize: '1.1rem' }}>体验反馈</h2>
+            </div>
+            {onClose && (
+              <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-emerald-100 transition-colors">
+                <X size={18} className="text-emerald-600" />
+              </button>
+            )}
+          </div>
+          <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(5, 150, 105, 0.08)' }}>
+            <p className="text-xs text-emerald-800" style={{ ...cuteTextStyle, fontWeight: 500, lineHeight: 1.7 }}>
+              感谢你完成刚才的对话。下面这些问题主要想了解你对这次聊天体验的真实感受，以及哪些地方还能继续优化。
+              请按照刚才的实际体验作答，没有标准答案，按第一感觉填写就可以。
+            </p>
+            <p className="mt-2 text-xs text-emerald-700/80" style={{ ...cuteTextStyle, fontWeight: 500, lineHeight: 1.7 }}>
+              评分方式：1 = 非常不同意，2 = 不同意，3 = 一般，4 = 同意，5 = 非常同意。
+            </p>
+          </div>
+        </div>
+
+        <div className="px-6 pb-6 flex flex-col gap-4">
+          {pilotFeedbackStatements.map((statement, questionIndex) => (
+            <motion.div
+              key={statement}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: questionIndex * 0.03 }}
+              className="rounded-2xl p-4"
+              style={{
+                background: agreementAnswers[questionIndex] > 0 ? 'rgba(5, 150, 105, 0.06)' : 'rgba(255,255,255,0.82)',
+                border: `1.5px solid ${agreementAnswers[questionIndex] > 0 ? 'rgba(5, 150, 105, 0.2)' : 'rgba(0,0,0,0.06)'}`,
+              }}
+            >
+              <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 text-xs text-white" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                  {questionIndex + 1}
+                </span>
+                {statement}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                {pilotFeedbackAgreementOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => handleAgreementSelect(questionIndex, option.value)}
+                    className="py-2 px-2 rounded-xl text-xs transition-all"
+                    style={{
+                      ...cuteTextStyle,
+                      fontWeight: agreementAnswers[questionIndex] === option.value ? 600 : 400,
+                      background: agreementAnswers[questionIndex] === option.value ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.9)',
+                      color: agreementAnswers[questionIndex] === option.value ? 'white' : '#065f46',
+                      border: `1.5px solid ${agreementAnswers[questionIndex] === option.value ? 'transparent' : 'rgba(5,150,105,0.15)'}`,
+                      boxShadow: agreementAnswers[questionIndex] === option.value ? '0 4px 12px rgba(5,150,105,0.3)' : 'none',
+                    }}
+                  >
+                    <div style={{ fontSize: '1rem', marginBottom: '2px' }}>{option.value}</div>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          ))}
+
+          <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.82)', border: '1.5px solid rgba(0,0,0,0.06)' }}>
+            <label className="block text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 text-xs text-white" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                8
+              </span>
+              这次体验中，你觉得最有帮助的部分是什么？
+            </label>
+            <textarea
+              value={mostHelpfulPart}
+              onChange={(event) => setMostHelpfulPart(event.target.value)}
+              placeholder="可以写一写哪一句话、哪个部分、哪种感觉最让你觉得有帮助。"
+              className="w-full min-h-[110px] rounded-2xl px-4 py-3 text-sm text-emerald-950 placeholder-emerald-400 focus:outline-none resize-y"
+              style={{ ...cuteTextStyle, border: '1.5px solid rgba(5,150,105,0.15)', background: 'rgba(255,255,255,0.95)' }}
+            />
+          </div>
+
+          <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.82)', border: '1.5px solid rgba(0,0,0,0.06)' }}>
+            <label className="block text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 text-xs text-white" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                9
+              </span>
+              这次体验中，你觉得最需要改进的部分是什么？
+            </label>
+            <textarea
+              value={needsImprovement}
+              onChange={(event) => setNeedsImprovement(event.target.value)}
+              placeholder="可以写一写哪些地方让你觉得不顺、别扭，或者还不够贴合。"
+              className="w-full min-h-[110px] rounded-2xl px-4 py-3 text-sm text-emerald-950 placeholder-emerald-400 focus:outline-none resize-y"
+              style={{ ...cuteTextStyle, border: '1.5px solid rgba(5,150,105,0.15)', background: 'rgba(255,255,255,0.95)' }}
+            />
+          </div>
+
+          <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.82)', border: '1.5px solid rgba(0,0,0,0.06)' }}>
+            <label className="block text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full mr-2 text-xs text-white" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+                10
+              </span>
+              如果以后参加类似活动，你更希望获得哪种感谢方式或奖品？
+            </label>
+            <textarea
+              value={preferredReward}
+              onChange={(event) => setPreferredReward(event.target.value)}
+              placeholder="可以写你更偏好的感谢方式，或者你觉得更合适的奖品形式。"
+              className="w-full min-h-[96px] rounded-2xl px-4 py-3 text-sm text-emerald-950 placeholder-emerald-400 focus:outline-none resize-y"
+              style={{ ...cuteTextStyle, border: '1.5px solid rgba(5,150,105,0.15)', background: 'rgba(255,255,255,0.95)' }}
+            />
+            <div className="mt-4">
+              <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 600 }}>
+                如果是“陶瓷杯 + 橡皮擦 + 随身笔记本”的组合，你会打几分？（满分 10 分）
+              </p>
+              <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
+                  <button
+                    key={score}
+                    onClick={() => setComboRewardScore(score)}
+                    className="py-2 px-1 rounded-xl text-xs transition-all"
+                    style={{
+                      ...cuteTextStyle,
+                      fontWeight: comboRewardScore === score ? 600 : 400,
+                      background: comboRewardScore === score ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.9)',
+                      color: comboRewardScore === score ? 'white' : '#065f46',
+                      border: `1.5px solid ${comboRewardScore === score ? 'transparent' : 'rgba(5,150,105,0.15)'}`,
+                      boxShadow: comboRewardScore === score ? '0 4px 12px rgba(5,150,105,0.3)' : 'none',
+                    }}
+                  >
+                    {score}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <motion.button
+            whileHover={allAnswered ? { scale: 1.03 } : {}}
+            whileTap={allAnswered ? { scale: 0.97 } : {}}
+            onClick={handleSubmit}
+            disabled={!allAnswered}
+            className="w-full py-3 rounded-2xl text-white mt-2 transition-all disabled:opacity-40"
+            style={{
+              ...cuteTextStyle,
+              fontWeight: 600,
+              background: allAnswered ? 'linear-gradient(135deg, #059669 0%, #047857 100%)' : 'rgba(5,150,105,0.3)',
+              boxShadow: allAnswered ? '0 10px 30px rgba(5, 150, 105, 0.35)' : 'none',
+            }}
+          >
+            {allAnswered
+              ? '提交反馈'
+              : `请完成所有题目（${agreementAnswers.filter((answer) => answer > 0).length + (mostHelpfulPart.trim() ? 1 : 0) + (needsImprovement.trim() ? 1 : 0) + (preferredReward.trim() ? 1 : 0) + (comboRewardScore !== null ? 1 : 0)}/10）`}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 function PANASQuestionnaire({ onSubmit, onClose }: { onSubmit: (result: PANASResult) => void; onClose?: () => void }) {
   const [answers, setAnswers] = useState<number[]>(Array(20).fill(0));
   const allAnswered = answers.every((answer) => answer > 0);
@@ -1296,7 +1539,7 @@ function ChatInterface({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [exitStep, setExitStep] = useState<'idle' | 'stai' | 'panas' | 'events'>('idle');
+  const [exitStep, setExitStep] = useState<'idle' | 'stai' | 'pilot-feedback' | 'panas' | 'events'>('idle');
   const [preSessionDone, setPreSessionDone] = useState(false);
   const [showConsent, setShowConsent] = useState(account.isPilot);
   const [showPilotBasicInfo, setShowPilotBasicInfo] = useState(false);
@@ -1458,7 +1701,7 @@ function ChatInterface({
   const handlePostSTAISubmit = (result: STAIResult) => {
     void result;
     if (account.isPilot) {
-      finalizeLogout();
+      setExitStep('pilot-feedback');
       return;
     }
     if (completedSessionsCount + 1 === TARGET_SESSIONS_FOR_FOLLOWUP) {
@@ -1489,6 +1732,11 @@ function ChatInterface({
   const handlePANASSubmit = (result: PANASResult) => {
     void result;
     setExitStep('events');
+  };
+
+  const handlePilotFeedbackSubmit = (result: PilotFeedbackResult) => {
+    void result;
+    finalizeLogout();
   };
 
   const handleEventChecklistSubmit = (result: EventChecklistResult) => {
@@ -1531,6 +1779,15 @@ function ChatInterface({
           <STAIQuestionnaire
             type="post"
             onSubmit={handlePostSTAISubmit}
+            onClose={() => setExitStep('idle')}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {exitStep === 'pilot-feedback' && (
+          <PilotFeedbackQuestionnaire
+            onSubmit={handlePilotFeedbackSubmit}
             onClose={() => setExitStep('idle')}
           />
         )}
