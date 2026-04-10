@@ -1539,7 +1539,8 @@ function ChatInterface({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [exitStep, setExitStep] = useState<'idle' | 'stai' | 'pilot-feedback' | 'panas' | 'events'>('idle');
+  const [exitStep, setExitStep] = useState<'idle' | 'pilot-feedback' | 'panas' | 'events'>('idle');
+  const [showPostSTAI, setShowPostSTAI] = useState(false);
   const [preSessionDone, setPreSessionDone] = useState(false);
   const [showConsent, setShowConsent] = useState(account.isPilot);
   const [showPilotBasicInfo, setShowPilotBasicInfo] = useState(false);
@@ -1762,6 +1763,7 @@ function ChatInterface({
 
   const finalizeLogout = () => {
     pauseSessionTimer();
+    setShowPostSTAI(false);
     if (!account.isPilot) {
       const nextCount = completedSessionsCount + 1;
       setCompletedSessionsCount(nextCount);
@@ -1773,10 +1775,11 @@ function ChatInterface({
 
   const handleLogoutClick = () => {
     pauseSessionTimer();
-    setExitStep('stai');
+    setShowPostSTAI(true);
   };
 
   const handleExitFlowClose = () => {
+    setShowPostSTAI(false);
     setExitStep('idle');
     if (preSessionDone) {
       resumeSessionTimer();
@@ -1786,6 +1789,7 @@ function ChatInterface({
   const handlePostSTAISubmit = async (result: STAIResult) => {
     try {
       await persistAccountEvent('stai', result);
+      setShowPostSTAI(false);
       if (account.isPilot) {
         setExitStep('pilot-feedback');
         return;
@@ -1889,7 +1893,7 @@ function ChatInterface({
 
       {/* Post-session STAI (on logout) */}
       <AnimatePresence>
-        {exitStep === 'stai' && (
+        {showPostSTAI && (
           <STAIQuestionnaire
             type="post"
             onSubmit={handlePostSTAISubmit}
