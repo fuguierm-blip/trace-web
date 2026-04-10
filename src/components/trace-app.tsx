@@ -32,6 +32,15 @@ interface EventChecklistResult {
   timestamp: Date;
 }
 
+interface ChatStreamEvent {
+  type: 'status' | 'chunk' | 'replace' | 'done' | 'error';
+  phase?: string;
+  content?: string;
+  reply?: string;
+  session?: TraceSession;
+  error?: string;
+}
+
 const welcomeMessage: Message = {
   id: 'trace-welcome',
   text: '你好！我是 Trace 🌿 很高兴见到你。我是一个温暖、善解人意的 AI 伙伴，你可以和我分享任何想法、感受或烦恼。我会认真倾听，陪伴你度过每一个时刻。请在开始之前先告诉我您的年龄、专业和性别。等我先了解这些基本信息后，再陪你慢慢说最近让你感到焦虑的事情。',
@@ -882,7 +891,14 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
     if (messageText === '' || isTyping) return;
     const previousMessages = messages;
     const userMessage: Message = { id: crypto.randomUUID(), text: messageText, sender: 'user', timestamp: new Date() };
-    setMessages([...messages, userMessage]);
+    const assistantPlaceholderId = crypto.randomUUID();
+    const assistantPlaceholder: Message = {
+      id: assistantPlaceholderId,
+      text: '',
+      sender: 'ai',
+      timestamp: new Date(),
+    };
+    setMessages([...messages, userMessage, assistantPlaceholder]);
     setInputValue('');
     setErrorText('');
     setIsTyping(true);
@@ -899,18 +915,82 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
         }),
       });
 
-      const payload = (await response.json()) as {
-        error?: string;
-        session?: TraceSession;
-      };
-
-      if (!response.ok || !payload.session) {
-        throw new Error(payload.error || 'TRACE 暂时没有返回结果。');
+      if (!response.ok || !response.body) {
+        const payload = (await response.json().catch(() => null)) as {
+          error?: string;
+          session?: TraceSession;
+        } | null;
+        throw new Error(payload?.error || 'TRACE 暂时没有返回结果。');
       }
 
-      setSnapshot(payload.session);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finishedSession: TraceSession | null = null;
+
+      const applyAssistantChunk = (chunk: string) => {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantPlaceholderId
+              ? { ...message, text: `${message.text}${chunk}` }
+              : message,
+          ),
+        );
+      };
+
+      const replaceAssistantContent = (content: string) => {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantPlaceholderId
+              ? { ...message, text: content }
+              : message,
+          ),
+        );
+      };
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            continue;
+          }
+
+          const event = JSON.parse(trimmed) as ChatStreamEvent;
+
+          if (event.type === 'chunk' && event.content) {
+            applyAssistantChunk(event.content);
+          }
+
+          if (event.type === 'replace') {
+            replaceAssistantContent(event.content || '');
+          }
+
+          if (event.type === 'done' && event.session) {
+            finishedSession = event.session;
+          }
+
+          if (event.type === 'error') {
+            throw new Error(event.error || 'TRACE 暂时没有返回结果。');
+          }
+        }
+      }
+
+      if (!finishedSession) {
+        throw new Error('TRACE 暂时没有返回结果。');
+      }
+
+      setSnapshot(finishedSession);
       setMessages(
-        payload.session.history.map((message) => ({
+        finishedSession.history.map((message) => ({
           id: message.id,
           text: message.content,
           sender: message.role === 'assistant' ? 'ai' : 'user',

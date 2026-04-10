@@ -10,8 +10,7 @@ import {
   type TraceSession,
   type TraceState,
 } from "@/lib/trace/types";
-
-const sessionStore = new Map<string, TraceSession>();
+import { getRedisClient, getSessionRedisKey } from "@/lib/trace/redis-client";
 
 function buildEmptyAppraisals(): AppraisalMap {
   return Object.fromEntries(
@@ -96,13 +95,19 @@ function sanitizeState(value: unknown): TraceState {
   };
 }
 
-export function restoreSession(
+export async function restoreSession(
   sessionId: string,
   snapshot?: Partial<TraceSession>,
-): TraceSession {
-  const existing = sessionStore.get(sessionId);
+): Promise<TraceSession> {
+  const client = await getRedisClient();
+  const existing = await client.get(getSessionRedisKey(sessionId));
   if (existing) {
-    return existing;
+    const parsed = JSON.parse(existing) as TraceSession;
+    return {
+      ...parsed,
+      state: sanitizeState(parsed.state),
+      history: Array.isArray(parsed.history) ? parsed.history : [],
+    };
   }
 
   const restored = buildInitialSession(sessionId);
@@ -132,15 +137,16 @@ export function restoreSession(
     restored.state = sanitizeState(snapshot.state);
   }
 
-  sessionStore.set(sessionId, restored);
+  await client.set(getSessionRedisKey(sessionId), JSON.stringify(restored));
   return restored;
 }
 
-export function saveSession(session: TraceSession): TraceSession {
+export async function saveSession(session: TraceSession): Promise<TraceSession> {
   const nextSession = {
     ...session,
     updatedAt: new Date().toISOString(),
   };
-  sessionStore.set(session.sessionId, nextSession);
+  const client = await getRedisClient();
+  await client.set(getSessionRedisKey(session.sessionId), JSON.stringify(nextSession));
   return nextSession;
 }

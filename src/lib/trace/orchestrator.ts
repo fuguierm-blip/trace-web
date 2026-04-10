@@ -9,7 +9,7 @@ import {
   buildPlannerPrompt,
   TRACE_PROMPT_LIBRARY,
 } from "@/lib/trace/prompts";
-import { callTraceJson, callTraceText } from "@/lib/trace/openai";
+import { callTraceJson, callTraceText, callTraceTextStream } from "@/lib/trace/openai";
 import type {
   SafetyDecision,
   StateExtraction,
@@ -302,6 +302,9 @@ async function validateOrRewrite(args: {
 export async function runTraceTurn(args: {
   session: TraceSession;
   userMessage: string;
+  onResponseChunk?: (chunk: string) => Promise<void> | void;
+  onResponseReset?: () => Promise<void> | void;
+  onStatus?: (phase: string) => Promise<void> | void;
 }): Promise<{ reply: string; session: TraceSession }> {
   const userMessage = sanitizeMessage(args.userMessage);
   const userEntry: TraceMessage = {
@@ -313,6 +316,8 @@ export async function runTraceTurn(args: {
 
   const historyWithUser = [...args.session.history, userEntry];
   const shortHistory = recentHistory(historyWithUser);
+
+  await args.onStatus?.("safety");
 
   const safety = await callTraceJson<SafetyDecision>(
     TRACE_PROMPT_LIBRARY.identity,
@@ -368,6 +373,8 @@ export async function runTraceTurn(args: {
     );
   }
 
+  await args.onStatus?.("analysis");
+
   const extracted = await callTraceJson<StateExtraction>(
     TRACE_PROMPT_LIBRARY.identity,
     buildStateExtractorPrompt({
@@ -378,6 +385,8 @@ export async function runTraceTurn(args: {
     0.1,
   );
   const normalizedExtracted = normalizeStateExtraction(extracted, args.session);
+
+  await args.onStatus?.("planning");
 
   const plan = await callTraceJson<StrategyPlan>(
     TRACE_PROMPT_LIBRARY.identity,
@@ -390,17 +399,28 @@ export async function runTraceTurn(args: {
   );
   const normalizedPlan = normalizePlan(plan, args.session);
 
-  const draftedReply = await callTraceText(
-    TRACE_PROMPT_LIBRARY.identity,
-    buildResponsePrompt({
-      history: shortHistory,
-      state: args.session.state,
-      extracted: normalizedExtracted,
-      plan: normalizedPlan,
-      userMessage,
-    }),
-    0.6,
-  );
+  const responsePrompt = buildResponsePrompt({
+    history: shortHistory,
+    state: args.session.state,
+    extracted: normalizedExtracted,
+    plan: normalizedPlan,
+    userMessage,
+  });
+
+  await args.onStatus?.("responding");
+
+  const draftedReply =
+    args.onResponseChunk
+      ? await callTraceTextStream(
+          TRACE_PROMPT_LIBRARY.identity,
+          responsePrompt,
+          args.onResponseChunk,
+          args.onResponseReset,
+          0.6,
+        )
+      : await callTraceText(TRACE_PROMPT_LIBRARY.identity, responsePrompt, 0.6);
+
+  await args.onStatus?.("finalizing");
 
   const finalReply = await validateOrRewrite({
     history: shortHistory,
