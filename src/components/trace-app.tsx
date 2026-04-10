@@ -1549,8 +1549,40 @@ function ChatInterface({
   const [errorText, setErrorText] = useState('');
   const [noticeMessage, setNoticeMessage] = useState('');
   const [completedSessionsCount, setCompletedSessionsCount] = useState(0);
+  const [timerStartedAt, setTimerStartedAt] = useState<number | null>(null);
+  const [timerElapsedSeconds, setTimerElapsedSeconds] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const visibleMessages = [welcomeMessage, ...messages];
+
+  const persistAccountEvent = async (
+    eventType: 'consent' | 'pilot-basic-info' | 'stai' | 'panas' | 'event-checklist' | 'pilot-feedback',
+    payload: unknown,
+  ) => {
+    const response = await fetch('/api/account-record', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        username: account.username,
+        isPilot: account.isPilot,
+        sessionId,
+        eventType,
+        payload,
+      }),
+    });
+
+    if (!response.ok) {
+      const failure = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(failure?.error || '账号记录保存失败，请稍后重试。');
+    }
+  };
+
+  const showSaveError = (error: unknown, fallbackMessage: string) => {
+    const message = error instanceof Error ? error.message : fallbackMessage;
+    setNoticeMessage(message);
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1563,6 +1595,48 @@ function ChatInterface({
       setCompletedSessionsCount(parsedCount);
     }
   }, [account.username]);
+
+  useEffect(() => {
+    if (!isTimerRunning || timerStartedAt === null) {
+      return;
+    }
+
+    const tick = () => {
+      setTimerElapsedSeconds(Math.max(0, Math.floor((Date.now() - timerStartedAt) / 1000)));
+    };
+
+    tick();
+    const intervalId = window.setInterval(tick, 1000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isTimerRunning, timerStartedAt]);
+
+  const formatElapsedTime = (totalSeconds: number) => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  };
+
+  const startSessionTimer = () => {
+    const now = Date.now();
+    setTimerStartedAt(now);
+    setTimerElapsedSeconds(0);
+    setIsTimerRunning(true);
+  };
+
+  const pauseSessionTimer = () => {
+    if (timerStartedAt !== null) {
+      setTimerElapsedSeconds(Math.max(0, Math.floor((Date.now() - timerStartedAt) / 1000)));
+    }
+    setIsTimerRunning(false);
+  };
+
+  const resumeSessionTimer = () => {
+    const resumedStartedAt = Date.now() - timerElapsedSeconds * 1000;
+    setTimerStartedAt(resumedStartedAt);
+    setIsTimerRunning(true);
+  };
 
   const handleSendMessage = async (text?: string) => {
     const messageText = (text || inputValue).trim();
@@ -1590,6 +1664,8 @@ function ChatInterface({
           sessionId,
           message: messageText,
           snapshot: snapshot ?? undefined,
+          username: account.username,
+          isPilot: account.isPilot,
         }),
       });
 
@@ -1685,6 +1761,7 @@ function ChatInterface({
   };
 
   const finalizeLogout = () => {
+    pauseSessionTimer();
     if (!account.isPilot) {
       const nextCount = completedSessionsCount + 1;
       setCompletedSessionsCount(nextCount);
@@ -1695,53 +1772,90 @@ function ChatInterface({
   };
 
   const handleLogoutClick = () => {
+    pauseSessionTimer();
     setExitStep('stai');
   };
 
-  const handlePostSTAISubmit = (result: STAIResult) => {
-    void result;
-    if (account.isPilot) {
-      setExitStep('pilot-feedback');
-      return;
+  const handleExitFlowClose = () => {
+    setExitStep('idle');
+    if (preSessionDone) {
+      resumeSessionTimer();
     }
-    if (completedSessionsCount + 1 === TARGET_SESSIONS_FOR_FOLLOWUP) {
-      setExitStep('panas');
-      return;
+  };
+
+  const handlePostSTAISubmit = async (result: STAIResult) => {
+    try {
+      await persistAccountEvent('stai', result);
+      if (account.isPilot) {
+        setExitStep('pilot-feedback');
+        return;
+      }
+      if (completedSessionsCount + 1 === TARGET_SESSIONS_FOR_FOLLOWUP) {
+        setExitStep('panas');
+        return;
+      }
+      finalizeLogout();
+    } catch (error) {
+      showSaveError(error, '会后 STAI-S-6 保存失败，请稍后重试。');
     }
-    finalizeLogout();
   };
 
-  const handlePreSTAISubmit = (result: STAIResult) => {
-    void result;
-    setShowPreSTAI(false);
-    setPreSessionDone(true);
+  const handlePreSTAISubmit = async (result: STAIResult) => {
+    try {
+      await persistAccountEvent('stai', result);
+      setShowPreSTAI(false);
+      setPreSessionDone(true);
+      startSessionTimer();
+    } catch (error) {
+      showSaveError(error, '会前 STAI-S-6 保存失败，请稍后重试。');
+    }
   };
 
-  const handleConsentSubmit = (result: ConsentResult) => {
-    void result;
-    setShowConsent(false);
-    setShowPilotBasicInfo(true);
+  const handleConsentSubmit = async (result: ConsentResult) => {
+    try {
+      await persistAccountEvent('consent', result);
+      setShowConsent(false);
+      setShowPilotBasicInfo(true);
+    } catch (error) {
+      showSaveError(error, '知情同意书保存失败，请稍后重试。');
+    }
   };
 
-  const handlePilotBasicInfoSubmit = (result: PilotBasicInfoResult) => {
-    void result;
-    setShowPilotBasicInfo(false);
-    setShowPreSTAI(true);
+  const handlePilotBasicInfoSubmit = async (result: PilotBasicInfoResult) => {
+    try {
+      await persistAccountEvent('pilot-basic-info', result);
+      setShowPilotBasicInfo(false);
+      setShowPreSTAI(true);
+    } catch (error) {
+      showSaveError(error, '基本信息保存失败，请稍后重试。');
+    }
   };
 
-  const handlePANASSubmit = (result: PANASResult) => {
-    void result;
-    setExitStep('events');
+  const handlePANASSubmit = async (result: PANASResult) => {
+    try {
+      await persistAccountEvent('panas', result);
+      setExitStep('events');
+    } catch (error) {
+      showSaveError(error, 'PANAS 保存失败，请稍后重试。');
+    }
   };
 
-  const handlePilotFeedbackSubmit = (result: PilotFeedbackResult) => {
-    void result;
-    finalizeLogout();
+  const handlePilotFeedbackSubmit = async (result: PilotFeedbackResult) => {
+    try {
+      await persistAccountEvent('pilot-feedback', result);
+      finalizeLogout();
+    } catch (error) {
+      showSaveError(error, '试测反馈保存失败，请稍后重试。');
+    }
   };
 
-  const handleEventChecklistSubmit = (result: EventChecklistResult) => {
-    void result;
-    finalizeLogout();
+  const handleEventChecklistSubmit = async (result: EventChecklistResult) => {
+    try {
+      await persistAccountEvent('event-checklist', result);
+      finalizeLogout();
+    } catch (error) {
+      showSaveError(error, '事件核查表保存失败，请稍后重试。');
+    }
   };
 
   const handleSTAIAccessClick = () => {
@@ -1779,7 +1893,7 @@ function ChatInterface({
           <STAIQuestionnaire
             type="post"
             onSubmit={handlePostSTAISubmit}
-            onClose={() => setExitStep('idle')}
+            onClose={handleExitFlowClose}
           />
         )}
       </AnimatePresence>
@@ -1788,7 +1902,7 @@ function ChatInterface({
         {exitStep === 'pilot-feedback' && (
           <PilotFeedbackQuestionnaire
             onSubmit={handlePilotFeedbackSubmit}
-            onClose={() => setExitStep('idle')}
+            onClose={handleExitFlowClose}
           />
         )}
       </AnimatePresence>
@@ -1797,7 +1911,7 @@ function ChatInterface({
         {exitStep === 'panas' && (
           <PANASQuestionnaire
             onSubmit={handlePANASSubmit}
-            onClose={() => setExitStep('idle')}
+            onClose={handleExitFlowClose}
           />
         )}
       </AnimatePresence>
@@ -1806,7 +1920,7 @@ function ChatInterface({
         {exitStep === 'events' && (
           <EventChecklistQuestionnaire
             onSubmit={handleEventChecklistSubmit}
-            onClose={() => setExitStep('idle')}
+            onClose={handleExitFlowClose}
           />
         )}
       </AnimatePresence>
@@ -1827,6 +1941,19 @@ function ChatInterface({
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
                 <span className="text-xs text-emerald-700">在线</span>
+                {preSessionDone && (
+                  <span
+                    className="ml-2 rounded-full px-2 py-0.5 text-[11px] text-emerald-800"
+                    style={{
+                      ...cuteTextStyle,
+                      fontWeight: 600,
+                      background: 'rgba(5,150,105,0.1)',
+                      border: '1px solid rgba(5,150,105,0.16)',
+                    }}
+                  >
+                    会话计时 {formatElapsedTime(timerElapsedSeconds)}
+                  </span>
+                )}
               </div>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runTraceTurn } from "@/lib/trace/orchestrator";
+import { upsertAccountSession } from "@/lib/trace/account-record-store";
 import { restoreSession, saveSession } from "@/lib/trace/session-store";
 import type { TraceSession } from "@/lib/trace/types";
 
@@ -7,6 +8,8 @@ interface ChatRequest {
   sessionId?: string;
   message?: string;
   snapshot?: Partial<TraceSession>;
+  username?: string;
+  isPilot?: boolean;
 }
 
 export async function POST(request: Request) {
@@ -14,10 +17,12 @@ export async function POST(request: Request) {
     const body = (await request.json()) as ChatRequest;
     const sessionId = body.sessionId?.trim();
     const message = body.message?.trim();
+    const username = body.username?.trim();
+    const isPilot = body.isPilot;
 
-    if (!sessionId || !message) {
+    if (!sessionId || !message || !username || typeof isPilot !== "boolean") {
       return NextResponse.json(
-        { error: "请求缺少 sessionId 或 message。" },
+        { error: "请求缺少账号信息、sessionId 或 message。" },
         { status: 400 },
       );
     }
@@ -47,6 +52,11 @@ export async function POST(request: Request) {
             },
           });
           const savedSession = await saveSession(result.session);
+          await upsertAccountSession({
+            username,
+            isPilot,
+            session: savedSession,
+          });
 
           push({
             type: "done",
