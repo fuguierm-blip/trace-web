@@ -60,6 +60,14 @@ interface UserAccount {
   isPilot: boolean;
 }
 
+interface RestoredAccountRecord {
+  sessions?: Array<{
+    sessionId: string;
+    savedAt: string;
+    chat: TraceSession;
+  }>;
+}
+
 interface ConsentResult {
   hasRead: boolean;
   knowsBoundary: boolean;
@@ -98,6 +106,8 @@ const TARGET_SESSIONS_FOR_FOLLOWUP = 3;
 const VALID_TEST_ACCOUNTS = Array.from({ length: 10 }, (_, index) => String(index + 1));
 const SESSION_EFFECT_NOTICE =
   'TRACE 的目标是帮助您调节焦虑情绪，会话结束后您将重新做 STAI-S-6 量表，以检验 TRACE 的效果。';
+const RETURNING_PROMPT =
+  '欢迎回来，您最近有感到焦虑的事情吗，或者你想谈谈上次聊到的焦虑问题有所缓解吗？';
 
 const consentIntroParagraphs = [
   'TRACE 是一个面向大学生的文本对话系统，主要用于在日常交流中提供支持，帮助用户缓解焦虑、梳理当前困扰，并尝试换一个角度理解问题。TRACE 不提供临床诊断，也不能替代心理治疗或医疗服务。本次试测主要用于检查系统流程、会话体验与研究材料是否清晰可用。',
@@ -1672,6 +1682,47 @@ function TypingIndicator() {
   );
 }
 
+function ReturnDivider({ text }: { text: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="px-6 py-6"
+    >
+      <div className="max-w-3xl mx-auto">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-px flex-1" style={{ background: 'linear-gradient(to right, transparent, rgba(5,150,105,0.28))' }} />
+          <div
+            className="px-3 py-1 rounded-full text-[11px] text-emerald-700"
+            style={{
+              ...cuteTextStyle,
+              fontWeight: 600,
+              background: 'rgba(5,150,105,0.08)',
+              border: '1px solid rgba(5,150,105,0.12)',
+            }}
+          >
+            继续上次对话
+          </div>
+          <div className="h-px flex-1" style={{ background: 'linear-gradient(to left, transparent, rgba(5,150,105,0.28))' }} />
+        </div>
+        <div
+          className="rounded-2xl px-5 py-4 text-sm text-emerald-900"
+          style={{
+            ...cuteTextStyle,
+            fontWeight: 500,
+            lineHeight: 1.8,
+            background: 'rgba(255,255,255,0.86)',
+            border: '1px solid rgba(5,150,105,0.12)',
+            boxShadow: '0 10px 24px rgba(5,150,105,0.08)',
+          }}
+        >
+          {text}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 // ==================== Chat Interface ====================
 function ChatInterface({
   account,
@@ -1690,15 +1741,16 @@ function ChatInterface({
   const [showPilotBasicInfo, setShowPilotBasicInfo] = useState(false);
   const [showPreSTAI, setShowPreSTAI] = useState(!account.isPilot);
   const [snapshot, setSnapshot] = useState<TraceSession | null>(null);
-  const [sessionId] = useState(() => crypto.randomUUID());
+  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [errorText, setErrorText] = useState('');
   const [noticeMessage, setNoticeMessage] = useState('');
+  const [returnDividerAfterId, setReturnDividerAfterId] = useState<string | null>(null);
   const [completedSessionsCount, setCompletedSessionsCount] = useState(0);
   const [timerStartedAt, setTimerStartedAt] = useState<number | null>(null);
   const [timerElapsedSeconds, setTimerElapsedSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const visibleMessages = [welcomeMessage, ...messages];
+  const visibleMessages = messages.length > 0 || returnDividerAfterId ? messages : [welcomeMessage, ...messages];
 
   const persistAccountEvent = async (
     eventType: 'consent' | 'pilot-basic-info' | 'stai' | 'panas' | 'gad-7' | 'event-checklist' | 'pilot-feedback',
@@ -1740,6 +1792,64 @@ function ChatInterface({
       setCompletedSessionsCount(parsedCount);
     }
   }, [account.username]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreLatestSession = async () => {
+      try {
+        const response = await fetch(
+          `/api/account-record?username=${encodeURIComponent(account.username)}&isPilot=${String(account.isPilot)}`,
+        );
+        if (!response.ok) {
+          throw new Error('账号历史读取失败。');
+        }
+        const payload = (await response.json()) as { record?: RestoredAccountRecord };
+        if (cancelled) return;
+
+        const sessions = payload.record?.sessions ?? [];
+        if (sessions.length === 0) {
+          setMessages([]);
+          setSnapshot(null);
+          setReturnDividerAfterId(null);
+          setSessionId(crypto.randomUUID());
+          return;
+        }
+
+        const latestSession = [...sessions].sort((left, right) => {
+          const leftTime = new Date(left.chat?.updatedAt || left.savedAt || 0).getTime();
+          const rightTime = new Date(right.chat?.updatedAt || right.savedAt || 0).getTime();
+          return rightTime - leftTime;
+        })[0];
+
+        const restoredMessages = latestSession.chat.history.map((message) => ({
+          id: message.id,
+          text: message.content,
+          sender: message.role === 'assistant' ? 'ai' : 'user',
+          timestamp: new Date(message.createdAt),
+        })) as Message[];
+
+        setMessages(restoredMessages);
+        setSnapshot(latestSession.chat);
+        setReturnDividerAfterId(restoredMessages.at(-1)?.id ?? null);
+        setSessionId(crypto.randomUUID());
+      } catch (error) {
+        if (!cancelled) {
+          setMessages([]);
+          setSnapshot(null);
+          setReturnDividerAfterId(null);
+          setSessionId(crypto.randomUUID());
+          showSaveError(error, '账号历史读取失败，请稍后重试。');
+        }
+      }
+    };
+
+    void restoreLatestSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [account.username, account.isPilot]);
 
   useEffect(() => {
     if (!isTimerRunning || timerStartedAt === null) {
@@ -2196,7 +2306,10 @@ function ChatInterface({
         <div className="flex-1 overflow-y-auto" style={{ scrollBehavior: 'smooth' }}>
           <div className="max-w-3xl mx-auto py-6">
             {visibleMessages.map((message, index) => (
-              <ChatBubble key={message.id} message={message} index={index} />
+              <React.Fragment key={message.id}>
+                <ChatBubble message={message} index={index} />
+                {returnDividerAfterId === message.id && <ReturnDivider text={RETURNING_PROMPT} />}
+              </React.Fragment>
             ))}
             <AnimatePresence>
               {isTyping && <TypingIndicator />}

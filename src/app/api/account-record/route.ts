@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   appendAccountEvent,
   type AccountEventType,
+  restoreAccountRecord,
   upsertAccountSession,
 } from "@/lib/trace/account-record-store";
 import type { TraceSession } from "@/lib/trace/types";
@@ -84,6 +85,28 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "账号记录保存失败，请稍后重试。";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const username = searchParams.get("username")?.trim();
+    const isPilotValue = searchParams.get("isPilot");
+
+    if (!username || (isPilotValue !== "true" && isPilotValue !== "false")) {
+      return NextResponse.json(
+        { error: "请求缺少有效的账号信息。" },
+        { status: 400 },
+      );
+    }
+
+    const record = await restoreAccountRecord(username, isPilotValue === "true");
+    return NextResponse.json({ ok: true, record });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "账号记录读取失败，请稍后重试。";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
