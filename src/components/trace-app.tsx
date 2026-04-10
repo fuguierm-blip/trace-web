@@ -41,6 +41,33 @@ interface ChatStreamEvent {
   error?: string;
 }
 
+interface UserAccount {
+  username: string;
+  isPilot: boolean;
+}
+
+interface ConsentResult {
+  hasRead: boolean;
+  knowsBoundary: boolean;
+  knowsCanQuit: boolean;
+  agreesToJoin: boolean;
+  timestamp: Date;
+}
+
+interface PilotBasicInfoResult {
+  participantCode: string;
+  displayName: string;
+  contact: string;
+  age: string;
+  gender: string;
+  hometown: string;
+  schoolGrade: string;
+  major: string;
+  pressureSources: string[];
+  stressLevel: string;
+  timestamp: Date;
+}
+
 const welcomeMessage: Message = {
   id: 'trace-welcome',
   text: '你好！我是 Trace 🌿 很高兴见到你。我是一个温暖、善解人意的 AI 伙伴，你可以和我分享任何想法、感受或烦恼。我会认真倾听，陪伴你度过每一个时刻。请在开始之前先告诉我您的年龄、专业和性别。等我先了解这些基本信息后，再陪你慢慢说最近让你感到焦虑的事情。',
@@ -54,6 +81,90 @@ const cuteTextStyle = {
 
 const COMPLETED_SESSIONS_KEY = 'trace-completed-sessions-count';
 const TARGET_SESSIONS_FOR_FOLLOWUP = 3;
+const VALID_TEST_ACCOUNTS = Array.from({ length: 10 }, (_, index) => String(index + 1));
+
+const consentIntroParagraphs = [
+  'TRACE 是一个面向大学生的文本对话系统，主要用于在日常交流中提供支持，帮助用户缓解焦虑、梳理当前困扰，并尝试换一个角度理解问题。TRACE 不提供临床诊断，也不能替代心理治疗或医疗服务。本次试测主要用于检查系统流程、会话体验与研究材料是否清晰可用。',
+  '您受邀参加“TRACE 认知重评对话系统”试测。本次试测的主要目的是检查研究流程、问卷安排、系统可用性与会话体验，以便在正式研究开始前进一步优化材料和程序。',
+];
+
+const consentSections = [
+  {
+    title: '一、试测内容',
+    items: [
+      '本次试测通常包括：阅读并确认知情说明、填写基本信息、完成会前简短量表、参加 1 次 TRACE 会话、完成会后反馈问卷；必要时，研究人员可能会在结束后进行简短口头询问。',
+      '单次试测预计总时长约 20–40 分钟。',
+    ],
+  },
+  {
+    title: '二、隐私与资料使用',
+    items: [
+      '研究团队会尽量保护您的个人信息。试测材料将以编号形式整理，姓名、联系方式等识别信息将与研究数据分开保存。',
+      '您提供的问卷、会话内容和反馈意见仅用于本项目的试测评估、系统优化、学术研究或伦理审查需要，不会在公开材料中直接披露您的身份信息。',
+      '未经您的额外同意，研究团队不会公开能够直接识别您身份的原始信息。',
+    ],
+  },
+  {
+    title: '三、参加条件',
+    items: [
+      '您应为在读大学生，能够使用中文完成问卷与文本对话，并愿意按要求参加本次试测。',
+      '如果您当前情绪极度不稳定，或近期正处在需要优先接受专业帮助的状态，建议暂不参加本次试测。',
+    ],
+  },
+  {
+    title: '四、可能的不适与风险',
+    items: [
+      '在回顾个人压力、焦虑或困扰时，您可能会感到短暂不适、紧张或情绪波动。',
+      'TRACE 为低强度数字支持工具，不提供临床诊断，也不能替代心理治疗或医疗服务。',
+    ],
+  },
+  {
+    title: '五、可能的受益',
+    items: [
+      '您可能会从本次会话中获得一定的情绪梳理、问题澄清或短暂缓解。',
+      '本次试测更主要的意义在于帮助研究团队发现问题、优化系统与流程。',
+    ],
+  },
+  {
+    title: '六、自愿参加与退出',
+    items: [
+      '参加本次试测完全出于自愿。您可以在任何时候拒绝回答某个问题，或在不说明理由的情况下中止试测。',
+      '退出不会给您带来任何不利影响；如有补偿，将按研究安排执行。',
+    ],
+  },
+  {
+    title: '七、录音与记录',
+    items: [
+      '如研究人员在试测后进行简短口头访谈，可能会征求您是否同意录音。',
+      '您可以不同意录音；不同意不会影响您参与本次试测。',
+    ],
+  },
+  {
+    title: '八、研究说明',
+    items: [
+      '如果您对本次试测有疑问，可以当场向研究人员咨询。',
+      '如果您在试测过程中感到明显不适，请立即告诉研究人员，研究将暂停并视情况提供休息、退出或转介建议。',
+    ],
+  },
+];
+
+const pilotConsentChecks = [
+  '我已阅读并理解以上说明。',
+  '我知道本次活动属于试测，不是正式治疗，也不能替代专业心理服务。',
+  '我知道自己可以随时退出，且不会因此受到不利影响。',
+  '我同意参加本次试测。',
+];
+
+const pilotPressureSourceOptions = [
+  '学业 / 考试',
+  '求职 / 升学',
+  '人际关系',
+  '家庭',
+  '睡眠或身体状态',
+  '其他',
+];
+
+const pilotStressLevelOptions = ['没有', '偶尔', '有时', '经常'];
 
 // ==================== Eye Following Card ====================
 function EyeFollowingCard() {
@@ -156,7 +267,7 @@ function EyeFollowingCard() {
 }
 
 // ==================== Login Screen ====================
-function LoginScreen({ onLogin }: { onLogin: () => void }) {
+function LoginScreen({ onLogin }: { onLogin: (account: UserAccount) => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -168,11 +279,21 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
     setError('');
     if (!username.trim()) { setError('请输入账号'); return; }
     if (!password.trim()) { setError('请输入密码'); return; }
+    if (!VALID_TEST_ACCOUNTS.includes(username.trim())) {
+      setError('账号仅支持 1 到 10。');
+      return;
+    }
+    if (password.trim() !== username.trim()) {
+      setError('密码需与账号一致。');
+      return;
+    }
     setIsLoading(true);
-    // Simulate login
     setTimeout(() => {
       setIsLoading(false);
-      onLogin();
+      onLogin({
+        username: username.trim(),
+        isPilot: Number(username.trim()) >= 1 && Number(username.trim()) <= 6,
+      });
     }, 800);
   };
 
@@ -198,7 +319,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="请输入账号"
+                placeholder="请输入 1 到 10"
                 className="w-full pl-11 pr-4 py-3 rounded-2xl text-[15px] text-emerald-950 placeholder-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 transition-all"
                 style={{ ...cuteTextStyle, fontWeight: 400, background: 'rgba(255,255,255,0.85)', border: '1.5px solid rgba(5, 150, 105, 0.2)', backdropFilter: 'blur(10px)' }}
               />
@@ -211,7 +332,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="请输入密码"
+                placeholder="密码与账号相同"
                 className="w-full pl-11 pr-12 py-3 rounded-2xl text-[15px] text-emerald-950 placeholder-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 transition-all"
                 style={{ ...cuteTextStyle, fontWeight: 400, background: 'rgba(255,255,255,0.85)', border: '1.5px solid rgba(5, 150, 105, 0.2)', backdropFilter: 'blur(10px)' }}
               />
@@ -249,6 +370,312 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+function PilotConsentDialog({
+  onSubmit,
+}: {
+  onSubmit: (result: ConsentResult) => void;
+}) {
+  const [checks, setChecks] = useState<boolean[]>(Array(4).fill(false));
+  const allChecked = checks.every(Boolean);
+
+  const toggleCheck = (index: number) => {
+    setChecks((current) => current.map((item, itemIndex) => (itemIndex === index ? !item : item)));
+  };
+
+  const handleSubmit = () => {
+    if (!allChecked) {
+      return;
+    }
+    onSubmit({
+      hasRead: checks[0],
+      knowsBoundary: checks[1],
+      knowsCanQuit: checks[2],
+      agreesToJoin: checks[3],
+      timestamp: new Date(),
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)' }}
+    >
+      <motion.div
+        initial={{ scale: 0.94, y: 24 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.96, y: 12 }}
+        className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-3xl"
+        style={{ background: 'linear-gradient(to bottom, #f0fdf4, #ffffff)', boxShadow: '0 30px 80px rgba(0,0,0,0.18)' }}
+      >
+        <div className="sticky top-0 z-10 px-6 pt-6 pb-4 rounded-t-3xl" style={{ background: 'linear-gradient(to bottom, #f0fdf4, rgba(240,253,244,0.96))', backdropFilter: 'blur(12px)' }}>
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+              <ClipboardList size={18} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-emerald-900" style={{ ...cuteTextStyle, fontWeight: 700, fontSize: '1.1rem' }}>TRACE 试测版知情同意书</h2>
+              <p className="text-xs text-emerald-700/80" style={{ ...cuteTextStyle, fontWeight: 500 }}>请先阅读并确认以下说明，再继续进入试测流程。</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 pb-6">
+          <div className="rounded-2xl p-5 mb-4" style={{ background: 'rgba(255,255,255,0.88)', border: '1.5px solid rgba(5,150,105,0.12)' }}>
+            {consentIntroParagraphs.map((text) => (
+              <p key={text} className="text-sm text-emerald-950 mb-3" style={{ lineHeight: 1.75 }}>
+                {text}
+              </p>
+            ))}
+            {consentSections.map((section) => (
+              <div key={section.title} className="mb-4">
+                <p className="text-sm text-emerald-900 mb-2" style={{ ...cuteTextStyle, fontWeight: 700 }}>{section.title}</p>
+                {section.items.map((item) => (
+                  <p key={item} className="text-sm text-emerald-950 mb-2" style={{ lineHeight: 1.75 }}>
+                    {item}
+                  </p>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl p-5" style={{ background: 'rgba(5,150,105,0.06)', border: '1.5px solid rgba(5,150,105,0.12)' }}>
+            <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 700 }}>请勾选以下确认项</p>
+            <div className="flex flex-col gap-3">
+              {pilotConsentChecks.map((label, index) => (
+                <button
+                  key={label}
+                  onClick={() => toggleCheck(index)}
+                  className="flex items-start gap-3 rounded-2xl px-4 py-3 text-left transition-all"
+                  style={{
+                    background: checks[index] ? 'rgba(5,150,105,0.14)' : 'rgba(255,255,255,0.92)',
+                    border: `1.5px solid ${checks[index] ? 'rgba(5,150,105,0.24)' : 'rgba(5,150,105,0.1)'}`,
+                  }}
+                >
+                  <span
+                    className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-md text-xs"
+                    style={{
+                      background: checks[index] ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(5,150,105,0.08)',
+                      color: checks[index] ? 'white' : '#047857',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {checks[index] ? '✓' : ''}
+                  </span>
+                  <span className="text-sm text-emerald-950" style={{ lineHeight: 1.7 }}>{label}</span>
+                </button>
+              ))}
+            </div>
+
+            <motion.button
+              whileHover={allChecked ? { scale: 1.02 } : {}}
+              whileTap={allChecked ? { scale: 0.98 } : {}}
+              onClick={handleSubmit}
+              disabled={!allChecked}
+              className="mt-5 w-full rounded-2xl py-3 text-white transition-all disabled:opacity-40"
+              style={{
+                ...cuteTextStyle,
+                fontWeight: 700,
+                background: allChecked ? 'linear-gradient(135deg, #059669 0%, #047857 100%)' : 'rgba(5,150,105,0.3)',
+                boxShadow: allChecked ? '0 10px 30px rgba(5,150,105,0.25)' : 'none',
+              }}
+            >
+              同意并继续
+            </motion.button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function PilotBasicInfoDialog({
+  onSubmit,
+}: {
+  onSubmit: (result: PilotBasicInfoResult) => void;
+}) {
+  const [participantCode, setParticipantCode] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [contact, setContact] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
+  const [hometown, setHometown] = useState('');
+  const [schoolGrade, setSchoolGrade] = useState('');
+  const [major, setMajor] = useState('');
+  const [pressureSources, setPressureSources] = useState<string[]>([]);
+  const [stressLevel, setStressLevel] = useState('');
+
+  const togglePressureSource = (value: string) => {
+    setPressureSources((current) =>
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value],
+    );
+  };
+
+  const canSubmit = age.trim() && gender && hometown.trim() && schoolGrade.trim() && major.trim() && stressLevel;
+
+  const handleSubmit = () => {
+    if (!canSubmit) {
+      return;
+    }
+    onSubmit({
+      participantCode: participantCode.trim(),
+      displayName: displayName.trim(),
+      contact: contact.trim(),
+      age: age.trim(),
+      gender,
+      hometown: hometown.trim(),
+      schoolGrade: schoolGrade.trim(),
+      major: major.trim(),
+      pressureSources,
+      stressLevel,
+      timestamp: new Date(),
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)' }}
+    >
+      <motion.div
+        initial={{ scale: 0.94, y: 24 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.96, y: 12 }}
+        className="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-3xl"
+        style={{ background: 'linear-gradient(to bottom, #f0fdf4, #ffffff)', boxShadow: '0 30px 80px rgba(0,0,0,0.18)' }}
+      >
+        <div className="sticky top-0 z-10 px-6 pt-6 pb-4 rounded-t-3xl" style={{ background: 'linear-gradient(to bottom, #f0fdf4, rgba(240,253,244,0.96))', backdropFilter: 'blur(12px)' }}>
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #059669, #10b981)' }}>
+              <ClipboardList size={18} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-emerald-900" style={{ ...cuteTextStyle, fontWeight: 700, fontSize: '1.1rem' }}>TRACE 试测版基本信息填写表</h2>
+              <p className="text-xs text-emerald-700/80" style={{ ...cuteTextStyle, fontWeight: 500 }}>请根据实际情况填写。若个别项目暂时不便提供，可留空非必填项。</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 pb-6 flex flex-col gap-4">
+          <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(5,150,105,0.08)' }}>
+            <p className="text-xs text-emerald-800" style={{ ...cuteTextStyle, fontWeight: 500, lineHeight: 1.7 }}>
+              本表用于安排本次试测流程和整理基础背景信息。带 <span style={{ fontWeight: 700 }}>*</span> 的项目请尽量填写完整。
+            </p>
+          </div>
+
+          {[
+            { label: '受试者编号（如已收到，可填写）', value: participantCode, setter: setParticipantCode, placeholder: '例如：P-01' },
+            { label: '姓名或昵称', value: displayName, setter: setDisplayName, placeholder: '例如：小林' },
+            { label: '联系方式（手机或微信）', value: contact, setter: setContact, placeholder: '例如：微信号 / 手机号' },
+            { label: '年龄 *', value: age, setter: setAge, placeholder: '例如：20' },
+            { label: '家乡 *', value: hometown, setter: setHometown, placeholder: '例如：湖南长沙' },
+            { label: '学校与年级 *', value: schoolGrade, setter: setSchoolGrade, placeholder: '例如：XX大学大三' },
+            { label: '所学专业 *', value: major, setter: setMajor, placeholder: '例如：心理学' },
+          ].map((field) => (
+            <div key={field.label} className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.88)', border: '1.5px solid rgba(5,150,105,0.1)' }}>
+              <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 700 }}>{field.label}</p>
+              <input
+                value={field.value}
+                onChange={(event) => field.setter(event.target.value)}
+                placeholder={field.placeholder}
+                className="w-full rounded-2xl px-4 py-3 text-sm text-emerald-950 placeholder-emerald-400 focus:outline-none"
+                style={{ background: 'rgba(255,255,255,0.95)', border: '1.5px solid rgba(5,150,105,0.15)' }}
+              />
+            </div>
+          ))}
+
+          <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.88)', border: '1.5px solid rgba(5,150,105,0.1)' }}>
+            <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 700 }}>性别 *</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {['女', '男', '其他 / 不便说明'].map((option) => (
+                <button
+                  key={option}
+                  onClick={() => setGender(option)}
+                  className="rounded-2xl px-4 py-3 text-sm transition-all"
+                  style={{
+                    ...cuteTextStyle,
+                    fontWeight: gender === option ? 700 : 500,
+                    background: gender === option ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.95)',
+                    color: gender === option ? 'white' : '#065f46',
+                    border: `1.5px solid ${gender === option ? 'transparent' : 'rgba(5,150,105,0.15)'}`,
+                  }}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.88)', border: '1.5px solid rgba(5,150,105,0.1)' }}>
+            <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 700 }}>目前最主要的压力来源（可多选）</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {pilotPressureSourceOptions.map((option) => (
+                <button
+                  key={option}
+                  onClick={() => togglePressureSource(option)}
+                  className="rounded-2xl px-4 py-3 text-sm text-left transition-all"
+                  style={{
+                    ...cuteTextStyle,
+                    fontWeight: pressureSources.includes(option) ? 700 : 500,
+                    background: pressureSources.includes(option) ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.95)',
+                    color: pressureSources.includes(option) ? 'white' : '#065f46',
+                    border: `1.5px solid ${pressureSources.includes(option) ? 'transparent' : 'rgba(5,150,105,0.15)'}`,
+                  }}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl p-4" style={{ background: 'rgba(255,255,255,0.88)', border: '1.5px solid rgba(5,150,105,0.1)' }}>
+            <p className="text-sm text-emerald-900 mb-3" style={{ ...cuteTextStyle, fontWeight: 700 }}>过去两周是否常感到紧张、担心或压力较大 *</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {pilotStressLevelOptions.map((option) => (
+                <button
+                  key={option}
+                  onClick={() => setStressLevel(option)}
+                  className="rounded-2xl px-4 py-3 text-sm transition-all"
+                  style={{
+                    ...cuteTextStyle,
+                    fontWeight: stressLevel === option ? 700 : 500,
+                    background: stressLevel === option ? 'linear-gradient(135deg, #059669, #10b981)' : 'rgba(255,255,255,0.95)',
+                    color: stressLevel === option ? 'white' : '#065f46',
+                    border: `1.5px solid ${stressLevel === option ? 'transparent' : 'rgba(5,150,105,0.15)'}`,
+                  }}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <motion.button
+            whileHover={canSubmit ? { scale: 1.02 } : {}}
+            whileTap={canSubmit ? { scale: 0.98 } : {}}
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="w-full rounded-2xl py-3 text-white transition-all disabled:opacity-40"
+            style={{
+              ...cuteTextStyle,
+              fontWeight: 700,
+              background: canSubmit ? 'linear-gradient(135deg, #059669 0%, #047857 100%)' : 'rgba(5,150,105,0.3)',
+              boxShadow: canSubmit ? '0 10px 30px rgba(5,150,105,0.25)' : 'none',
+            }}
+          >
+            提交基本信息并继续
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -859,13 +1286,21 @@ function TypingIndicator() {
 }
 
 // ==================== Chat Interface ====================
-function ChatInterface({ onLogout }: { onLogout: () => void }) {
+function ChatInterface({
+  account,
+  onLogout,
+}: {
+  account: UserAccount;
+  onLogout: () => void;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [exitStep, setExitStep] = useState<'idle' | 'stai' | 'panas' | 'events'>('idle');
   const [preSessionDone, setPreSessionDone] = useState(false);
-  const [showPreSTAI, setShowPreSTAI] = useState(true);
+  const [showConsent, setShowConsent] = useState(account.isPilot);
+  const [showPilotBasicInfo, setShowPilotBasicInfo] = useState(false);
+  const [showPreSTAI, setShowPreSTAI] = useState(!account.isPilot);
   const [snapshot, setSnapshot] = useState<TraceSession | null>(null);
   const [sessionId] = useState(() => crypto.randomUUID());
   const [errorText, setErrorText] = useState('');
@@ -879,12 +1314,12 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
   }, [messages, isTyping]);
 
   useEffect(() => {
-    const storedCount = window.localStorage.getItem(COMPLETED_SESSIONS_KEY);
+    const storedCount = window.localStorage.getItem(`${COMPLETED_SESSIONS_KEY}:${account.username}`);
     const parsedCount = storedCount ? Number.parseInt(storedCount, 10) : 0;
     if (Number.isFinite(parsedCount) && parsedCount >= 0) {
       setCompletedSessionsCount(parsedCount);
     }
-  }, []);
+  }, [account.username]);
 
   const handleSendMessage = async (text?: string) => {
     const messageText = (text || inputValue).trim();
@@ -1007,9 +1442,11 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
   };
 
   const finalizeLogout = () => {
-    const nextCount = completedSessionsCount + 1;
-    setCompletedSessionsCount(nextCount);
-    window.localStorage.setItem(COMPLETED_SESSIONS_KEY, String(nextCount));
+    if (!account.isPilot) {
+      const nextCount = completedSessionsCount + 1;
+      setCompletedSessionsCount(nextCount);
+      window.localStorage.setItem(`${COMPLETED_SESSIONS_KEY}:${account.username}`, String(nextCount));
+    }
     setExitStep('idle');
     onLogout();
   };
@@ -1020,6 +1457,10 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
 
   const handlePostSTAISubmit = (result: STAIResult) => {
     void result;
+    if (account.isPilot) {
+      finalizeLogout();
+      return;
+    }
     if (completedSessionsCount + 1 === TARGET_SESSIONS_FOR_FOLLOWUP) {
       setExitStep('panas');
       return;
@@ -1031,6 +1472,18 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
     void result;
     setShowPreSTAI(false);
     setPreSessionDone(true);
+  };
+
+  const handleConsentSubmit = (result: ConsentResult) => {
+    void result;
+    setShowConsent(false);
+    setShowPilotBasicInfo(true);
+  };
+
+  const handlePilotBasicInfoSubmit = (result: PilotBasicInfoResult) => {
+    void result;
+    setShowPilotBasicInfo(false);
+    setShowPreSTAI(true);
   };
 
   const handlePANASSubmit = (result: PANASResult) => {
@@ -1056,6 +1509,18 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
       <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, #f0fdf4 0%, #dcfce7 100%)' }} />
 
       {/* Pre-session STAI */}
+      <AnimatePresence>
+        {showConsent && (
+          <PilotConsentDialog onSubmit={handleConsentSubmit} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showPilotBasicInfo && (
+          <PilotBasicInfoDialog onSubmit={handlePilotBasicInfoSubmit} />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {showPreSTAI && <STAIQuestionnaire type="pre" onSubmit={handlePreSTAISubmit} />}
       </AnimatePresence>
@@ -1119,26 +1584,30 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
               <ClipboardList size={14} />
               <span>STAI-S-6</span>
             </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleFollowupScaleAccessClick}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-emerald-700 transition-all"
-              style={{ ...cuteTextStyle, fontWeight: 500, background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.15)' }}
-            >
-              <ClipboardList size={14} />
-              <span>PANAS</span>
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleFollowupScaleAccessClick}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-emerald-700 transition-all"
-              style={{ ...cuteTextStyle, fontWeight: 500, background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.15)' }}
-            >
-              <ClipboardList size={14} />
-              <span>事件核查表</span>
-            </motion.button>
+            {!account.isPilot && (
+              <>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleFollowupScaleAccessClick}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-emerald-700 transition-all"
+                  style={{ ...cuteTextStyle, fontWeight: 500, background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.15)' }}
+                >
+                  <ClipboardList size={14} />
+                  <span>PANAS</span>
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleFollowupScaleAccessClick}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs text-emerald-700 transition-all"
+                  style={{ ...cuteTextStyle, fontWeight: 500, background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.15)' }}
+                >
+                  <ClipboardList size={14} />
+                  <span>事件核查表</span>
+                </motion.button>
+              </>
+            )}
             <button onClick={handleLogoutClick} className="text-sm text-emerald-700 hover:text-emerald-900 transition-colors" style={{ fontWeight: 500 }}>退出</button>
           </div>
         </motion.div>
@@ -1154,10 +1623,12 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
             📋 STAI-S-6 焦虑量表需在每次会话<span style={{ fontWeight: 600 }}>开始前</span>及<span style={{ fontWeight: 600 }}>结束后</span>各填写一次
             {preSessionDone && <span className="ml-2 text-emerald-600" style={{ fontWeight: 600 }}>✓ 会话前已完成</span>}
           </p>
-          <p className="mt-1 text-xs text-emerald-700/80 text-center" style={{ ...cuteTextStyle, fontWeight: 400 }}>
-            📋 PANAS 与事件核查表会在<span style={{ fontWeight: 600 }}>第三次会话结束并点击离开后</span>自动出现
-            <span className="ml-2 text-emerald-600" style={{ fontWeight: 600 }}>已完成会话：{completedSessionsCount}</span>
-          </p>
+          {!account.isPilot && (
+            <p className="mt-1 text-xs text-emerald-700/80 text-center" style={{ ...cuteTextStyle, fontWeight: 400 }}>
+              📋 PANAS 与事件核查表会在<span style={{ fontWeight: 600 }}>第三次会话结束并点击离开后</span>自动出现
+              <span className="ml-2 text-emerald-600" style={{ fontWeight: 600 }}>已完成会话：{completedSessionsCount}</span>
+            </p>
+          )}
         </motion.div>
 
         {/* Messages */}
@@ -1203,17 +1674,29 @@ function ChatInterface({ onLogout }: { onLogout: () => void }) {
 // ==================== Main App ====================
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [activeAccount, setActiveAccount] = useState<UserAccount | null>(null);
 
   return (
     <div className="w-full h-full relative overflow-hidden">
       <AnimatePresence mode="wait">
         {!isLoggedIn ? (
           <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }} className="w-full h-full">
-            <LoginScreen onLogin={() => { setIsLoggedIn(true); }} />
+            <LoginScreen onLogin={(account) => {
+              setActiveAccount(account);
+              setIsLoggedIn(true);
+            }} />
           </motion.div>
         ) : (
           <motion.div key="chat" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }} className="w-full h-full">
-            <ChatInterface onLogout={() => setIsLoggedIn(false)} />
+            {activeAccount && (
+              <ChatInterface
+                account={activeAccount}
+                onLogout={() => {
+                  setIsLoggedIn(false);
+                  setActiveAccount(null);
+                }}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
