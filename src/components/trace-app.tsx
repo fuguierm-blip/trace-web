@@ -66,6 +66,12 @@ interface RestoredAccountRecord {
     savedAt: string;
     chat: TraceSession;
   }>;
+  staiRecords?: Array<{
+    sessionId: string;
+    data?: {
+      type?: 'pre' | 'post';
+    };
+  }>;
 }
 
 interface ConsentResult {
@@ -101,7 +107,6 @@ const cuteTextStyle = {
   fontFamily: "'ZCOOL KuaiLe', 'Ma Shan Zheng', cursive, sans-serif"
 };
 
-const COMPLETED_SESSIONS_KEY = 'trace-completed-sessions-count';
 const TARGET_SESSIONS_FOR_FOLLOWUP = 3;
 const VALID_TEST_ACCOUNTS = Array.from({ length: 10 }, (_, index) => String(index + 1));
 const SESSION_EFFECT_NOTICE =
@@ -1786,14 +1791,6 @@ function ChatInterface({
   }, [messages, isTyping]);
 
   useEffect(() => {
-    const storedCount = window.localStorage.getItem(`${COMPLETED_SESSIONS_KEY}:${account.username}`);
-    const parsedCount = storedCount ? Number.parseInt(storedCount, 10) : 0;
-    if (Number.isFinite(parsedCount) && parsedCount >= 0) {
-      setCompletedSessionsCount(parsedCount);
-    }
-  }, [account.username]);
-
-  useEffect(() => {
     let cancelled = false;
 
     const restoreLatestSession = async () => {
@@ -1814,6 +1811,13 @@ function ChatInterface({
         }
         const payload = (await response.json()) as { record?: RestoredAccountRecord };
         if (cancelled) return;
+
+        const completedSessionIds = new Set(
+          (payload.record?.staiRecords ?? [])
+            .filter((record) => record.data?.type === 'post' && typeof record.sessionId === 'string' && record.sessionId.trim() !== '')
+            .map((record) => record.sessionId),
+        );
+        setCompletedSessionsCount(completedSessionIds.size);
 
         const sessions = payload.record?.sessions ?? [];
         if (sessions.length === 0) {
@@ -2027,9 +2031,7 @@ function ChatInterface({
     pauseSessionTimer();
     setShowPostSTAI(false);
     if (!account.isPilot) {
-      const nextCount = completedSessionsCount + 1;
-      setCompletedSessionsCount(nextCount);
-      window.localStorage.setItem(`${COMPLETED_SESSIONS_KEY}:${account.username}`, String(nextCount));
+      setCompletedSessionsCount((current) => current + 1);
     }
     setExitStep('idle');
     onLogout();
