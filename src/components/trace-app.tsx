@@ -1798,9 +1798,17 @@ function ChatInterface({
 
     const restoreLatestSession = async () => {
       try {
-        const response = await fetch(
-          `/api/account-record?username=${encodeURIComponent(account.username)}&isPilot=${String(account.isPilot)}`,
-        );
+        const response = await fetch('/api/account-record', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: account.username,
+            isPilot: account.isPilot,
+            eventType: 'load-record',
+          }),
+        });
         if (!response.ok) {
           throw new Error('账号历史读取失败。');
         }

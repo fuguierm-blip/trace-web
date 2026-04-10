@@ -11,7 +11,7 @@ interface AccountRecordRequest {
   username?: string;
   isPilot?: boolean;
   sessionId?: string;
-  eventType?: AccountEventType | "sync-session";
+  eventType?: AccountEventType | "sync-session" | "load-record";
   payload?: unknown;
   session?: TraceSession;
 }
@@ -58,6 +58,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, recordUpdatedAt: record.updatedAt });
     }
 
+    if (body.eventType === "load-record") {
+      const record = await restoreAccountRecord(username, isPilot);
+      return NextResponse.json({ ok: true, record });
+    }
+
     if (!isAccountEventType(body.eventType)) {
       return NextResponse.json(
         { error: "请求缺少有效的事件类型。" },
@@ -85,28 +90,6 @@ export async function POST(request: Request) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "账号记录保存失败，请稍后重试。";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-}
-
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const username = searchParams.get("username")?.trim();
-    const isPilotValue = searchParams.get("isPilot");
-
-    if (!username || (isPilotValue !== "true" && isPilotValue !== "false")) {
-      return NextResponse.json(
-        { error: "请求缺少有效的账号信息。" },
-        { status: 400 },
-      );
-    }
-
-    const record = await restoreAccountRecord(username, isPilotValue === "true");
-    return NextResponse.json({ ok: true, record });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "账号记录读取失败，请稍后重试。";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
