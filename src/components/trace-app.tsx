@@ -598,7 +598,7 @@ function PilotBasicInfoDialog({
           </div>
 
           {[
-            { label: '受试者编号（如已收到，可填写）', value: participantCode, setter: setParticipantCode, placeholder: '例如：P-01' },
+            { label: '受试者编号（就是您的账号，如已收到，可填写）', value: participantCode, setter: setParticipantCode, placeholder: '例如：P-01' },
             { label: '姓名或昵称', value: displayName, setter: setDisplayName, placeholder: '例如：小林' },
             { label: '联系方式（手机或微信）', value: contact, setter: setContact, placeholder: '例如：微信号 / 手机号' },
             { label: '年龄 *', value: age, setter: setAge, placeholder: '例如：20' },
