@@ -423,8 +423,10 @@ function LoginScreen({ onLogin }: { onLogin: (account: UserAccount) => void }) {
 
 function PilotConsentDialog({
   onSubmit,
+  embedded = false,
 }: {
   onSubmit: (result: ConsentResult) => void;
+  embedded?: boolean;
 }) {
   const [checks, setChecks] = useState<boolean[]>(Array(4).fill(false));
   const allChecked = checks.every(Boolean);
@@ -446,14 +448,7 @@ function PilotConsentDialog({
     });
   };
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)' }}
-    >
+  const content = (
       <motion.div
         initial={{ scale: 0.94, y: 24 }}
         animate={{ scale: 1, y: 0 }}
@@ -538,14 +533,31 @@ function PilotConsentDialog({
           </div>
         </div>
       </motion.div>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)' }}
+    >
+      {content}
     </motion.div>
   );
 }
 
 function PilotBasicInfoDialog({
   onSubmit,
+  embedded = false,
 }: {
   onSubmit: (result: PilotBasicInfoResult) => void;
+  embedded?: boolean;
 }) {
   const [participantCode, setParticipantCode] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -585,14 +597,7 @@ function PilotBasicInfoDialog({
     });
   };
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)' }}
-    >
+  const content = (
       <motion.div
         initial={{ scale: 0.94, y: 24 }}
         animate={{ scale: 1, y: 0 }}
@@ -723,6 +728,21 @@ function PilotBasicInfoDialog({
           </motion.button>
         </div>
       </motion.div>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)' }}
+    >
+      {content}
     </motion.div>
   );
 }
@@ -818,7 +838,17 @@ const eventCategoryOptions = [
   '其他',
 ];
 
-function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; onSubmit: (result: STAIResult) => void; onClose?: () => void }) {
+function STAIQuestionnaire({
+  type,
+  onSubmit,
+  onClose,
+  embedded = false,
+}: {
+  type: 'pre' | 'post';
+  onSubmit: (result: STAIResult) => void;
+  onClose?: () => void;
+  embedded?: boolean;
+}) {
   const [answers, setAnswers] = useState<number[]>(Array(6).fill(0));
   const allAnswered = answers.every(a => a > 0);
 
@@ -831,14 +861,7 @@ function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; 
     onSubmit({ answers: [...answers], timestamp: new Date(), type });
   };
 
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
-    >
+  const content = (
       <motion.div
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
@@ -937,6 +960,120 @@ function STAIQuestionnaire({ type, onSubmit, onClose }: { type: 'pre' | 'post'; 
           </motion.button>
         </div>
       </motion.div>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}
+    >
+      {content}
+    </motion.div>
+  );
+}
+
+function PreSessionFlowDialog({
+  isPilot,
+  onConsentSubmit,
+  onBasicInfoSubmit,
+  onStaiSubmit,
+}: {
+  isPilot: boolean;
+  onConsentSubmit: (result: ConsentResult) => Promise<void>;
+  onBasicInfoSubmit: (result: PilotBasicInfoResult) => Promise<void>;
+  onStaiSubmit: (result: STAIResult) => Promise<void>;
+}) {
+  const [step, setStep] = useState<'consent' | 'basic-info' | 'stai'>(isPilot ? 'consent' : 'stai');
+  const [error, setError] = useState('');
+
+  const runStep = async (task: () => Promise<void>, nextStep?: 'basic-info' | 'stai') => {
+    setError('');
+    try {
+      await task();
+      if (nextStep) {
+        setStep(nextStep);
+      }
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : '保存失败，请稍后重试。');
+    }
+  };
+
+  const stepLabel =
+    step === 'consent'
+      ? '知情同意'
+      : step === 'basic-info'
+        ? '基本信息'
+        : 'STAI-S-6';
+  const progressText =
+    isPilot
+      ? `会前流程：${stepLabel}（${step === 'consent' ? '1' : step === 'basic-info' ? '2' : '3'}/3）`
+      : '会前流程：STAI-S-6（1/1）';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)' }}
+    >
+      <div className="w-full max-w-3xl">
+        <div
+          className="mb-3 rounded-2xl px-4 py-3 text-sm text-emerald-900"
+          style={{
+            ...cuteTextStyle,
+            fontWeight: 700,
+            background: 'rgba(240,253,244,0.94)',
+            border: '1.5px solid rgba(5,150,105,0.16)',
+            boxShadow: '0 12px 30px rgba(0,0,0,0.12)',
+          }}
+        >
+          {progressText}
+          {error && (
+            <p className="mt-2 text-xs text-red-600" style={{ fontWeight: 600 }}>
+              {error}
+            </p>
+          )}
+        </div>
+
+        <AnimatePresence mode="wait">
+          {step === 'consent' && (
+            <PilotConsentDialog
+              key="consent"
+              embedded
+              onSubmit={(result) => {
+                void runStep(() => onConsentSubmit(result), 'basic-info');
+              }}
+            />
+          )}
+          {step === 'basic-info' && (
+            <PilotBasicInfoDialog
+              key="basic-info"
+              embedded
+              onSubmit={(result) => {
+                void runStep(() => onBasicInfoSubmit(result), 'stai');
+              }}
+            />
+          )}
+          {step === 'stai' && (
+            <STAIQuestionnaire
+              key="stai"
+              type="pre"
+              embedded
+              onSubmit={(result) => {
+                void runStep(() => onStaiSubmit(result));
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 }
@@ -1742,9 +1879,7 @@ function ChatInterface({
   const [exitStep, setExitStep] = useState<'idle' | 'pilot-feedback' | 'panas' | 'gad7' | 'events'>('idle');
   const [showPostSTAI, setShowPostSTAI] = useState(false);
   const [preSessionDone, setPreSessionDone] = useState(false);
-  const [showConsent, setShowConsent] = useState(account.isPilot);
-  const [showPilotBasicInfo, setShowPilotBasicInfo] = useState(false);
-  const [showPreSTAI, setShowPreSTAI] = useState(!account.isPilot);
+  const [showPreSessionFlow, setShowPreSessionFlow] = useState(true);
   const [snapshot, setSnapshot] = useState<TraceSession | null>(null);
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [errorText, setErrorText] = useState('');
@@ -1899,12 +2034,6 @@ function ChatInterface({
     setIsTimerRunning(false);
   };
 
-  const resumeSessionTimer = () => {
-    const resumedStartedAt = Date.now() - timerElapsedSeconds * 1000;
-    setTimerStartedAt(resumedStartedAt);
-    setIsTimerRunning(true);
-  };
-
   const handleSendMessage = async (text?: string) => {
     const messageText = (text || inputValue).trim();
     if (messageText === '' || isTyping) return;
@@ -2042,14 +2171,6 @@ function ChatInterface({
     setShowPostSTAI(true);
   };
 
-  const handleExitFlowClose = () => {
-    setShowPostSTAI(false);
-    setExitStep('idle');
-    if (preSessionDone) {
-      resumeSessionTimer();
-    }
-  };
-
   const handlePostSTAISubmit = async (result: STAIResult) => {
     try {
       await persistAccountEvent('stai', result);
@@ -2071,7 +2192,7 @@ function ChatInterface({
   const handlePreSTAISubmit = async (result: STAIResult) => {
     try {
       await persistAccountEvent('stai', result);
-      setShowPreSTAI(false);
+      setShowPreSessionFlow(false);
       setPreSessionDone(true);
       startSessionTimer();
       if (completedSessionsCount === 0) {
@@ -2083,23 +2204,11 @@ function ChatInterface({
   };
 
   const handleConsentSubmit = async (result: ConsentResult) => {
-    try {
-      await persistAccountEvent('consent', result);
-      setShowConsent(false);
-      setShowPilotBasicInfo(true);
-    } catch (error) {
-      showSaveError(error, '知情同意书保存失败，请稍后重试。');
-    }
+    await persistAccountEvent('consent', result);
   };
 
   const handlePilotBasicInfoSubmit = async (result: PilotBasicInfoResult) => {
-    try {
-      await persistAccountEvent('pilot-basic-info', result);
-      setShowPilotBasicInfo(false);
-      setShowPreSTAI(true);
-    } catch (error) {
-      showSaveError(error, '基本信息保存失败，请稍后重试。');
-    }
+    await persistAccountEvent('pilot-basic-info', result);
   };
 
   const handlePANASSubmit = async (result: PANASResult) => {
@@ -2150,21 +2259,15 @@ function ChatInterface({
     <div className="w-full h-full flex flex-col relative">
       <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, #f0fdf4 0%, #dcfce7 100%)' }} />
 
-      {/* Pre-session STAI */}
       <AnimatePresence>
-        {showConsent && (
-          <PilotConsentDialog onSubmit={handleConsentSubmit} />
+        {showPreSessionFlow && (
+          <PreSessionFlowDialog
+            isPilot={account.isPilot}
+            onConsentSubmit={handleConsentSubmit}
+            onBasicInfoSubmit={handlePilotBasicInfoSubmit}
+            onStaiSubmit={handlePreSTAISubmit}
+          />
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showPilotBasicInfo && (
-          <PilotBasicInfoDialog onSubmit={handlePilotBasicInfoSubmit} />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showPreSTAI && <STAIQuestionnaire type="pre" onSubmit={handlePreSTAISubmit} />}
       </AnimatePresence>
 
       {/* Post-session STAI (on logout) */}
@@ -2173,7 +2276,6 @@ function ChatInterface({
           <STAIQuestionnaire
             type="post"
             onSubmit={handlePostSTAISubmit}
-            onClose={handleExitFlowClose}
           />
         )}
       </AnimatePresence>
@@ -2182,7 +2284,6 @@ function ChatInterface({
         {exitStep === 'pilot-feedback' && (
           <PilotFeedbackQuestionnaire
             onSubmit={handlePilotFeedbackSubmit}
-            onClose={handleExitFlowClose}
           />
         )}
       </AnimatePresence>
@@ -2191,7 +2292,6 @@ function ChatInterface({
         {exitStep === 'panas' && (
           <PANASQuestionnaire
             onSubmit={handlePANASSubmit}
-            onClose={handleExitFlowClose}
           />
         )}
       </AnimatePresence>
@@ -2200,7 +2300,6 @@ function ChatInterface({
         {exitStep === 'gad7' && (
           <GAD7Questionnaire
             onSubmit={handleGAD7Submit}
-            onClose={handleExitFlowClose}
           />
         )}
       </AnimatePresence>
@@ -2209,7 +2308,6 @@ function ChatInterface({
         {exitStep === 'events' && (
           <EventChecklistQuestionnaire
             onSubmit={handleEventChecklistSubmit}
-            onClose={handleExitFlowClose}
           />
         )}
       </AnimatePresence>
